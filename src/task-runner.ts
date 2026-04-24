@@ -1,22 +1,19 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { ClaudeCli, ClaudeSession } from './claude-cli';
 import { WorktreeManager } from './worktree';
-import { PilotConfig } from './config';
+import { GitHubRepoInfo } from './github-detector';
+import { DevPilotDir } from './dev-pilot-dir';
+import * as path from 'path';
 
 export interface TaskInfo {
   id: string;
   type: 'dev-issue' | 'watch-pr';
   label: string;
   issueUrl?: string;
-  repoUrl: string;
-  repoDir: string;
   worktreeBranch?: string;
   worktreeDir?: string;
-  session?: ClaudeSession;
+  terminal?: vscode.Terminal;
   status: 'pending' | 'running' | 'completed' | 'failed';
   createdAt: number;
-  output: string[];
 }
 
 export class TaskRunner {
@@ -25,108 +22,98 @@ export class TaskRunner {
   readonly onTasksChanged = this._onTasksChanged.event;
 
   constructor(
-    private cli: ClaudeCli,
     private worktree: WorktreeManager,
-    private config: PilotConfig,
-  ) {}
+    private workspaceRoot: string,
+    private repoInfo: GitHubRepoInfo,
+    private devPilotDir: DevPilotDir,
+  ) {
+    // Watch for terminal close events to update task status
+    vscode.window.onDidCloseTerminal((closedTerminal) => {
+      for (const task of this.tasks.values()) {
+        if (task.terminal === closedTerminal) {
+          task.status = 'completed';
+          task.terminal = undefined;
+          this._onTasksChanged.fire();
+          this.devPilotDir.log('tasks', `Task ${task.id} (${task.label}) terminal closed`);
+        }
+      }
+    });
+  }
 
   /** Run /pilot-dev-issue for a given issue */
-  async runDevIssue(issueUrl: string): Promise<TaskInfo> {
-    // Determine which repo to use
-    const repoUrl = this.detectRepo(issueUrl) || this.config.yaml.repos[0];
-    if (!repoUrl) {
-      vscode.window.showErrorMessage('No repo configured in pilot.yaml');
-      throw new Error('No repo configured');
-    }
+  async runDevIssue(issueInput: string): Promise<TaskInfo> {
+    const issueNum = this.extractIssueNumber(issueInput);
+    const issueUrl = issueNum
+      ? `https://github.com/${this.repoInfo.owner}/${this.repoInfo.repo}/issues/${issueNum}`
+      : issueInput;
 
-    const repoName = this.config.repoName(repoUrl);
-    const repoDir = path.join(this.config.workspacePath, repoName);
-
-    // Create branch name from issue
-    const issueNum = this.extractIssueNumber(issueUrl);
     const branchName = issueNum ? `dev/issue-${issueNum}` : `dev/task-${Date.now()}`;
 
     // Create worktree
-    this.worktree.ensureGitignore(repoDir);
-    const wt = this.worktree.create(repoDir, branchName);
+    this.worktree.ensureGitignore(this.workspaceRoot);
+    const wt = this.worktree.create(this.workspaceRoot, branchName);
 
     const taskInfo: TaskInfo = {
       id: `dev-${Date.now()}`,
       type: 'dev-issue',
-      label: issueNum ? `Issue #${issueNum}` : issueUrl.substring(0, 40),
+      label: issueNum ? `Issue #${issueNum}` : issueInput.substring(0, 40),
       issueUrl,
-      repoUrl,
-      repoDir,
       worktreeBranch: branchName,
       worktreeDir: wt?.path,
-      status: 'pending',
+      status: 'running',
       createdAt: Date.now(),
-      output: [],
     };
 
     this.tasks.set(taskInfo.id, taskInfo);
-    this._onTasksChanged.fire();
+    this.devPilotDir.logJson('tasks', {
+      event: 'task_created',
+      taskId: taskInfo.id,
+      type: taskInfo.type,
+      issueUrl,
+      worktreeBranch: branchName,
+    });
 
-    // Run Claude Code in the worktree directory
-    const cwd = wt?.path || repoDir;
+    // Run Copilot CLI in VS Code terminal
+    const cwd = wt?.path || this.workspaceRoot;
     const command = `/pilot-dev-issue --auto ${issueUrl}`;
+    const terminalName = `Dev Pilot: ${taskInfo.label}`;
 
-    taskInfo.status = 'running';
-    const session = this.cli.run(command, cwd);
-    taskInfo.session = session;
-
-    session.onOutput.event((text) => {
-      taskInfo.output.push(text);
-      this._onTasksChanged.fire();
+    const terminal = vscode.window.createTerminal({
+      name: terminalName,
+      cwd,
+      iconPath: new vscode.ThemeIcon('rocket'),
     });
 
-    session.onStatusChange.event((status) => {
-      taskInfo.status = status === 'completed' ? 'completed' : 'failed';
-      this._onTasksChanged.fire();
+    terminal.show(false); // Show but don't steal focus
+    terminal.sendText(`gh copilot suggest "${command}"`, true);
 
-      if (taskInfo.status === 'completed') {
-        vscode.window.showInformationMessage(`Dev Pilot: ${taskInfo.label} completed!`);
-      } else {
-        vscode.window.showWarningMessage(`Dev Pilot: ${taskInfo.label} failed.`);
-      }
-    });
-
+    taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
     return taskInfo;
   }
 
   /** Run /pilot-watch-pr */
   async runWatchPRs(): Promise<TaskInfo> {
-    const repoUrl = this.config.yaml.repos[0] || '';
-    const repoName = this.config.repoName(repoUrl);
-    const repoDir = path.join(this.config.workspacePath, repoName);
-
     const taskInfo: TaskInfo = {
       id: `watch-${Date.now()}`,
       type: 'watch-pr',
       label: 'Watch PRs',
-      repoUrl,
-      repoDir,
       status: 'running',
       createdAt: Date.now(),
-      output: [],
     };
 
     this.tasks.set(taskInfo.id, taskInfo);
 
-    const session = this.cli.run('/pilot-watch-pr', repoDir);
-    taskInfo.session = session;
-
-    session.onOutput.event((text) => {
-      taskInfo.output.push(text);
-      this._onTasksChanged.fire();
+    const terminal = vscode.window.createTerminal({
+      name: 'Dev Pilot: Watch PRs',
+      cwd: this.workspaceRoot,
+      iconPath: new vscode.ThemeIcon('eye'),
     });
 
-    session.onStatusChange.event((status) => {
-      taskInfo.status = status === 'completed' ? 'completed' : 'failed';
-      this._onTasksChanged.fire();
-    });
+    terminal.show(false);
+    terminal.sendText(`gh copilot suggest "/pilot-watch-pr"`, true);
 
+    taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
     return taskInfo;
   }
@@ -136,24 +123,30 @@ export class TaskRunner {
     return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  /** Kill a task */
+  /** Kill a task (dispose its terminal) */
   killTask(taskId: string): void {
     const task = this.tasks.get(taskId);
-    if (task?.session) {
-      this.cli.kill(task.session.taskId);
+    if (task?.terminal) {
+      task.terminal.dispose();
       task.status = 'failed';
+      task.terminal = undefined;
       this._onTasksChanged.fire();
+      this.devPilotDir.log('tasks', `Task ${taskId} killed by user`);
     }
   }
 
   /** Clean up worktree for a completed task */
   cleanupTask(taskId: string): void {
     const task = this.tasks.get(taskId);
+    if (task?.terminal) {
+      task.terminal.dispose();
+    }
     if (task?.worktreeBranch) {
-      this.worktree.remove(task.repoDir, task.worktreeBranch);
+      this.worktree.remove(this.workspaceRoot, task.worktreeBranch);
     }
     this.tasks.delete(taskId);
     this._onTasksChanged.fire();
+    this.devPilotDir.log('tasks', `Task ${taskId} cleaned up`);
   }
 
   /** Open a task's worktree in a new VS Code window */
@@ -165,26 +158,19 @@ export class TaskRunner {
     }
   }
 
-  private detectRepo(issueUrl: string): string | undefined {
-    // Try to match issue URL to a configured repo
-    for (const repo of this.config.yaml.repos) {
-      // Extract org/repo from URL
-      const match = repo.match(/([^/]+\/[^/]+?)(?:\.git)?$/);
-      if (match && issueUrl.includes(match[1])) {
-        return repo;
-      }
+  /** Focus a task's terminal */
+  focusTerminal(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (task?.terminal) {
+      task.terminal.show();
     }
-    return undefined;
   }
 
   private extractIssueNumber(input: string): string | null {
-    // Match GitHub/GitLab issue URLs or #123 references
     const urlMatch = input.match(/\/issues\/(\d+)/);
     if (urlMatch) return urlMatch[1];
-
-    const refMatch = input.match(/#(\d+)/);
+    const refMatch = input.match(/#?(\d+)$/);
     if (refMatch) return refMatch[1];
-
     return null;
   }
 }

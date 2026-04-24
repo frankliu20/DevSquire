@@ -1,91 +1,94 @@
 import { describe, it, expect } from 'vitest';
 import * as path from 'path';
-import * as os from 'os';
 
-// Test config YAML parsing (extracted logic)
-function parseYaml(content: string) {
-  const result: Record<string, any> = {
-    workspace: path.join(os.homedir(), 'claude', 'workdir'),
-    platform: 'github',
-    repos: [],
-    chat_language: 'English',
-  };
-  let currentKey = '';
+// --- GitHubDetector logic (extracted for unit testing) ---
 
-  for (const rawLine of content.split('\n')) {
-    if (rawLine.trim() === '' || rawLine.trim().startsWith('#')) continue;
-    const indent = rawLine.length - rawLine.trimStart().length;
-    const line = rawLine.trim();
-
-    if (indent === 0 && line.includes(':')) {
-      const colonIdx = line.indexOf(':');
-      const key = line.substring(0, colonIdx).trim();
-      const value = line.substring(colonIdx + 1).trim();
-      currentKey = key;
-      if (value && key === 'workspace') result.workspace = value;
-      if (value && key === 'platform') result.platform = value;
-      if (value && key === 'chat_language') result.chat_language = value;
-      if (key === 'repos') result.repos = [];
-    } else if (indent > 0 && line.startsWith('- ') && currentKey === 'repos') {
-      result.repos.push(line.substring(2).trim());
-    }
-  }
-  return result;
+function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+  const httpsMatch = url.match(/github\.com\/([^/]+)\/([^/.]+)/);
+  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
+  const sshMatch = url.match(/github\.com:([^/]+)\/([^/.]+)/);
+  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
+  return null;
 }
 
-describe('PilotConfig YAML parsing', () => {
-  it('parses a complete pilot.yaml', () => {
-    const yaml = `# Dev Pilot Configuration
-workspace: ~/claude/workdir
-platform: github
-repos:
-  - https://github.com/org/repo1
-  - https://github.com/org/repo2
-chat_language: Chinese`;
+function parseGitConfig(content: string): string | null {
+  const lines = content.split('\n');
+  let inOrigin = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === '[remote "origin"]') { inOrigin = true; continue; }
+    if (trimmed.startsWith('[') && inOrigin) break;
+    if (inOrigin && trimmed.startsWith('url = ')) return trimmed.substring(6).trim();
+  }
+  return null;
+}
 
-    const result = parseYaml(yaml);
-    expect(result.workspace).toBe('~/claude/workdir');
-    expect(result.platform).toBe('github');
-    expect(result.repos).toEqual([
-      'https://github.com/org/repo1',
-      'https://github.com/org/repo2',
-    ]);
-    expect(result.chat_language).toBe('Chinese');
+function extractIssueNumber(input: string): string | null {
+  const urlMatch = input.match(/\/issues\/(\d+)/);
+  if (urlMatch) return urlMatch[1];
+  const refMatch = input.match(/#?(\d+)$/);
+  if (refMatch) return refMatch[1];
+  return null;
+}
+
+// --- Tests ---
+
+describe('GitHubDetector', () => {
+  describe('parseGitHubUrl', () => {
+    it('parses HTTPS URL', () => {
+      expect(parseGitHubUrl('https://github.com/octocat/hello-world.git'))
+        .toEqual({ owner: 'octocat', repo: 'hello-world' });
+    });
+
+    it('parses HTTPS URL without .git', () => {
+      expect(parseGitHubUrl('https://github.com/octocat/hello-world'))
+        .toEqual({ owner: 'octocat', repo: 'hello-world' });
+    });
+
+    it('parses SSH URL', () => {
+      expect(parseGitHubUrl('git@github.com:octocat/hello-world.git'))
+        .toEqual({ owner: 'octocat', repo: 'hello-world' });
+    });
+
+    it('returns null for non-GitHub URL', () => {
+      expect(parseGitHubUrl('https://gitlab.com/group/project.git')).toBeNull();
+    });
+
+    it('returns null for empty string', () => {
+      expect(parseGitHubUrl('')).toBeNull();
+    });
   });
 
-  it('returns defaults for empty content', () => {
-    const result = parseYaml('');
-    expect(result.platform).toBe('github');
-    expect(result.repos).toEqual([]);
-  });
+  describe('parseGitConfig', () => {
+    it('extracts origin URL from git config', () => {
+      const config = `[core]
+\trepositoryformatversion = 0
+[remote "origin"]
+\turl = https://github.com/octocat/hello-world.git
+\tfetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+\tremote = origin`;
+      expect(parseGitConfig(config)).toBe('https://github.com/octocat/hello-world.git');
+    });
 
-  it('handles gitlab platform', () => {
-    const yaml = `workspace: /home/user/work
-platform: gitlab
-repos:
-  - https://gitlab.com/group/project`;
-
-    const result = parseYaml(yaml);
-    expect(result.platform).toBe('gitlab');
-    expect(result.repos).toHaveLength(1);
+    it('returns null when no origin remote', () => {
+      const config = `[core]\n\tbare = false`;
+      expect(parseGitConfig(config)).toBeNull();
+    });
   });
 });
 
 describe('Issue number extraction', () => {
-  function extractIssueNumber(input: string): string | null {
-    const urlMatch = input.match(/\/issues\/(\d+)/);
-    if (urlMatch) return urlMatch[1];
-    const refMatch = input.match(/#(\d+)/);
-    if (refMatch) return refMatch[1];
-    return null;
-  }
-
-  it('extracts from GitHub URL', () => {
+  it('extracts from GitHub issue URL', () => {
     expect(extractIssueNumber('https://github.com/org/repo/issues/42')).toBe('42');
   });
 
   it('extracts from #ref', () => {
     expect(extractIssueNumber('#123')).toBe('123');
+  });
+
+  it('extracts bare number', () => {
+    expect(extractIssueNumber('456')).toBe('456');
   });
 
   it('returns null for plain text', () => {

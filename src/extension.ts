@@ -1,22 +1,47 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { DashboardViewProvider } from './dashboard-provider';
-import { ClaudeCli } from './claude-cli';
 import { WorktreeManager } from './worktree';
-import { PilotConfig } from './config';
 import { TaskRunner } from './task-runner';
+import { FrameworkSync } from './framework-sync';
+import { GitHubDetector } from './github-detector';
+import { DevPilotDir } from './dev-pilot-dir';
 
 let dashboardProvider: DashboardViewProvider;
 
-export function activate(context: vscode.ExtensionContext) {
-  const config = new PilotConfig();
-  const cli = new ClaudeCli(config);
+export async function activate(context: vscode.ExtensionContext) {
+  // Only activate if this workspace is a GitHub repo
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspaceRoot) return;
+
+  const detector = new GitHubDetector();
+  const repoInfo = detector.detect(workspaceRoot);
+  if (!repoInfo) {
+    // Not a GitHub repo — silently skip
+    return;
+  }
+
+  // Initialize .dev-pilot/ directory in workspace
+  const devPilotDir = new DevPilotDir(workspaceRoot);
+  devPilotDir.ensureDir();
+  devPilotDir.ensureGitignore();
+
+  // Sync framework commands/agents if enabled
+  const frameworkSync = new FrameworkSync(context);
+  const autoSync = vscode.workspace.getConfiguration('devPilot').get('autoSyncFramework', true);
+  if (autoSync) {
+    await frameworkSync.sync();
+  }
+
   const worktree = new WorktreeManager();
-  const taskRunner = new TaskRunner(cli, worktree, config);
+  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, devPilotDir);
 
   dashboardProvider = new DashboardViewProvider(
     context.extensionUri,
     taskRunner,
-    config,
+    repoInfo,
+    devPilotDir,
   );
 
   context.subscriptions.push(
@@ -28,8 +53,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('devPilot.devIssue', async () => {
       const issueUrl = await vscode.window.showInputBox({
-        prompt: 'Enter issue URL or description',
-        placeHolder: 'https://github.com/org/repo/issues/123',
+        prompt: 'Enter GitHub issue URL or #number',
+        placeHolder: `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/123`,
       });
       if (issueUrl) {
         taskRunner.runDevIssue(issueUrl);
@@ -39,18 +64,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('devPilot.watchPRs', () => {
       taskRunner.runWatchPRs();
     }),
-  );
 
-  // Listen for config changes
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('devPilot')) {
-        config.reload();
-      }
+    vscode.commands.registerCommand('devPilot.syncFramework', () => {
+      frameworkSync.sync(true);
     }),
   );
+
+  // Log activation
+  devPilotDir.log('extension', `Activated for ${repoInfo.owner}/${repoInfo.repo}`);
 }
 
-export function deactivate() {
-  // Cleanup handled by disposables
-}
+export function deactivate() {}

@@ -1,7 +1,7 @@
 {
   "name": "dev-pilot-vscode",
   "displayName": "Dev Pilot",
-  "description": "AI engineering team dashboard — orchestrate Claude Code workflows with worktree isolation from VS Code",
+  "description": "AI engineering team dashboard — orchestrate GitHub Copilot CLI workflows with worktree isolation from VS Code",
   "version": "0.1.0",
   "publisher": "dev-pilot",
   "license": "MIT",
@@ -11,7 +11,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "workspaceContains:.git/config"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -26,6 +28,10 @@
       {
         "command": "devPilot.watchPRs",
         "title": "Dev Pilot: Watch PRs"
+      },
+      {
+        "command": "devPilot.syncFramework",
+        "title": "Dev Pilot: Sync Commands & Agents"
       }
     ],
     "viewsContainers": {
@@ -49,15 +55,20 @@
     "configuration": {
       "title": "Dev Pilot",
       "properties": {
-        "devPilot.claudeCodePath": {
+        "devPilot.frameworkLocation": {
           "type": "string",
-          "default": "claude",
-          "description": "Path to Claude Code CLI binary"
+          "default": "home",
+          "enum": ["home", "project"],
+          "enumDescriptions": [
+            "Install commands/agents to ~/.copilot/ (shared across projects)",
+            "Install commands/agents to .github/copilot/ (per-project, committed to repo)"
+          ],
+          "description": "Where to install Dev Pilot commands and agents"
         },
-        "devPilot.pilotYamlPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to pilot.yaml (defaults to ~/.claude/pilot.yaml)"
+        "devPilot.autoSyncFramework": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync commands/agents on activation"
         }
       }
     }
