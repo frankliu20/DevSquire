@@ -7,6 +7,7 @@ import { TaskRunner } from './task-runner';
 import { FrameworkSync } from './framework-sync';
 import { GitHubDetector } from './github-detector';
 import { DevPilotDir } from './dev-pilot-dir';
+import { GitHubIssues } from './github-issues';
 
 let dashboardProvider: DashboardViewProvider;
 
@@ -35,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   const worktree = new WorktreeManager();
+  const ghIssues = new GitHubIssues();
   const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, devPilotDir);
 
   dashboardProvider = new DashboardViewProvider(
@@ -42,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
     taskRunner,
     repoInfo,
     devPilotDir,
+    ghIssues,
   );
 
   context.subscriptions.push(
