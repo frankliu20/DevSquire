@@ -1,0 +1,178 @@
+{
+  "name": "devsquire-vscode",
+  "displayName": "DevSquire — Agentic Engineer",
+  "description": "Agentic engineering team for VS Code — autonomously develops issues, reviews PRs, and monitors CI with worktree isolation",
+  "version": "0.1.0",
+  "publisher": "devsquire",
+  "license": "MIT",
+  "icon": "resources/logo.jpg",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:.git/config"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "devSquire.openDashboard",
+        "title": "DevSquire: Open Dashboard"
+      },
+      {
+        "command": "devSquire.devIssue",
+        "title": "DevSquire: Develop Issue"
+      },
+      {
+        "command": "devSquire.watchPRs",
+        "title": "DevSquire: Watch PRs"
+      },
+      {
+        "command": "devSquire.syncFramework",
+        "title": "DevSquire: Sync Agents"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devSquire",
+          "title": "DevSquire — Agentic Engineer",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "devSquire": [
+        {
+          "type": "webview",
+          "id": "devSquire.dashboard",
+          "name": "Dashboard"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DevSquire",
+      "properties": {
+        "devSquire.backend": {
+          "type": "string",
+          "default": "copilot-cli",
+          "enum": [
+            "copilot-cli",
+            "claude-code"
+          ],
+          "enumDescriptions": [
+            "GitHub Copilot CLI (copilot --agent)",
+            "Claude Code CLI (claude /command)"
+          ],
+          "description": "Which AI backend to use for tasks"
+        },
+        "devSquire.frameworkLocation": {
+          "type": "string",
+          "default": "home",
+          "enum": [
+            "home",
+            "project"
+          ],
+          "enumDescriptions": [
+            "Install agents to ~/.copilot/ (shared across projects)",
+            "Install agents to .github/copilot/ (per-project, committed to repo)"
+          ],
+          "description": "Where to install DevSquire agents"
+        },
+        "devSquire.autoSyncFramework": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync agents on activation"
+        },
+        "devSquire.watchPR.autoFixCI": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically fix CI failures on your PRs"
+        },
+        "devSquire.watchPR.autoFixComments": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically fix unresolved review comments on your PRs"
+        },
+        "devSquire.devIssue.mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "normal",
+            "auto"
+          ],
+          "enumDescriptions": [
+            "Pause for plan approval and test strategy selection",
+            "Run the entire pipeline without stopping"
+          ],
+          "description": "Default mode for dev-issue tasks"
+        },
+        "devSquire.fixComments.mode": {
+          "type": "string",
+          "default": "normal",
+          "enum": [
+            "normal",
+            "auto"
+          ],
+          "enumDescriptions": [
+            "Pause for confirmation before pushing fixes",
+            "Automatically fix and push without stopping"
+          ],
+          "description": "Default mode for fix-comments tasks"
+        },
+        "devSquire.reviewPR.strategy": {
+          "type": "string",
+          "default": "normal",
+          "enum": [
+            "normal",
+            "auto",
+            "quick-approve"
+          ],
+          "enumDescriptions": [
+            "Present findings and wait for user action",
+            "Automatically publish review comments to GitHub",
+            "Approve if no critical issues, otherwise request changes"
+          ],
+          "description": "Default review strategy"
+        },
+        "devSquire.reviewPR.level": {
+          "type": "string",
+          "default": "medium",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "enumDescriptions": [
+            "Only report must-fix issues (bugs, security)",
+            "Report must-fix and should-consider issues",
+            "Report all findings including minor suggestions"
+          ],
+          "description": "Default review detail level"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run compile -- --watch",
+    "lint": "eslint src --ext ts",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}
