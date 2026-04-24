@@ -9,16 +9,18 @@ export class DevPilotDir {
   readonly dir: string;
   readonly logsDir: string;
   readonly tasksDir: string;
+  readonly decisionsDir: string;
 
   constructor(private workspaceRoot: string) {
     this.dir = path.join(workspaceRoot, '.dev-pilot');
     this.logsDir = path.join(this.dir, 'logs');
     this.tasksDir = path.join(this.dir, 'tasks');
+    this.decisionsDir = path.join(this.dir, 'pending-decisions');
   }
 
   /** Ensure .dev-pilot/ and subdirectories exist */
   ensureDir(): void {
-    for (const dir of [this.dir, this.logsDir, this.tasksDir]) {
+    for (const dir of [this.dir, this.logsDir, this.tasksDir, this.decisionsDir]) {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }

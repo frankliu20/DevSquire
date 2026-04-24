@@ -4,16 +4,24 @@ import { GitHubRepoInfo } from './github-detector';
 import { DevPilotDir } from './dev-pilot-dir';
 import * as path from 'path';
 
+export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command';
+
 export interface TaskInfo {
   id: string;
-  type: 'dev-issue' | 'watch-pr';
+  type: TaskType;
   label: string;
   issueUrl?: string;
+  prNumber?: number;
   worktreeBranch?: string;
   worktreeDir?: string;
   terminal?: vscode.Terminal;
   status: 'pending' | 'running' | 'completed' | 'failed';
   createdAt: number;
+}
+
+export interface ReviewConfig {
+  strategy: 'normal' | 'auto-publish' | 'quick-approve';
+  level: 'critical' | 'important' | 'everything';
 }
 
 export class TaskRunner {
@@ -27,7 +35,6 @@ export class TaskRunner {
     private repoInfo: GitHubRepoInfo,
     private devPilotDir: DevPilotDir,
   ) {
-    // Watch for terminal close events to update task status
     vscode.window.onDidCloseTerminal((closedTerminal) => {
       for (const task of this.tasks.values()) {
         if (task.terminal === closedTerminal) {
@@ -41,7 +48,7 @@ export class TaskRunner {
   }
 
   /** Run /pilot-dev-issue for a given issue */
-  async runDevIssue(issueInput: string): Promise<TaskInfo> {
+  async runDevIssue(issueInput: string, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
     const issueNum = this.extractIssueNumber(issueInput);
     const issueUrl = issueNum
       ? `https://github.com/${this.repoInfo.owner}/${this.repoInfo.repo}/issues/${issueNum}`
@@ -49,7 +56,6 @@ export class TaskRunner {
 
     const branchName = issueNum ? `dev/issue-${issueNum}` : `dev/task-${Date.now()}`;
 
-    // Create worktree
     this.worktree.ensureGitignore(this.workspaceRoot);
     const wt = this.worktree.create(this.workspaceRoot, branchName);
 
@@ -64,31 +70,11 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.tasks.set(taskInfo.id, taskInfo);
-    this.devPilotDir.logJson('tasks', {
-      event: 'task_created',
-      taskId: taskInfo.id,
-      type: taskInfo.type,
-      issueUrl,
-      worktreeBranch: branchName,
-    });
-
-    // Run Copilot CLI in VS Code terminal
     const cwd = wt?.path || this.workspaceRoot;
-    const command = `/pilot-dev-issue --auto ${issueUrl}`;
-    const terminalName = `Dev Pilot: ${taskInfo.label}`;
+    const autoFlag = mode === 'auto' ? ' --auto' : '';
+    const command = `/pilot-dev-issue${autoFlag} ${issueUrl}`;
 
-    const terminal = vscode.window.createTerminal({
-      name: terminalName,
-      cwd,
-      iconPath: new vscode.ThemeIcon('rocket'),
-    });
-
-    terminal.show(false); // Show but don't steal focus
-    terminal.sendText(`gh copilot suggest "${command}"`, true);
-
-    taskInfo.terminal = terminal;
-    this._onTasksChanged.fire();
+    this.launchTerminal(taskInfo, command, cwd, 'rocket');
     return taskInfo;
   }
 
@@ -102,28 +88,60 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.tasks.set(taskInfo.id, taskInfo);
-
-    const terminal = vscode.window.createTerminal({
-      name: 'Dev Pilot: Watch PRs',
-      cwd: this.workspaceRoot,
-      iconPath: new vscode.ThemeIcon('eye'),
-    });
-
-    terminal.show(false);
-    terminal.sendText(`gh copilot suggest "/pilot-watch-pr"`, true);
-
-    taskInfo.terminal = terminal;
-    this._onTasksChanged.fire();
+    this.launchTerminal(taskInfo, '/pilot-watch-pr', this.workspaceRoot, 'eye');
     return taskInfo;
   }
 
-  /** Get all tasks */
+  /** Review a PR */
+  async runReviewPR(prNumber: number, config: ReviewConfig): Promise<TaskInfo> {
+    const taskInfo: TaskInfo = {
+      id: `review-${Date.now()}`,
+      type: 'review-pr',
+      label: `Review PR #${prNumber}`,
+      prNumber,
+      status: 'running',
+      createdAt: Date.now(),
+    };
+
+    const prompt = `Review PR #${prNumber} in ${this.repoInfo.owner}/${this.repoInfo.repo}. Strategy: ${config.strategy}. Level: ${config.level}. Provide a thorough code review.`;
+    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, 'code-review');
+    return taskInfo;
+  }
+
+  /** Fix PR comments */
+  async runFixComments(prNumber: number): Promise<TaskInfo> {
+    const taskInfo: TaskInfo = {
+      id: `fix-${Date.now()}`,
+      type: 'fix-comments',
+      label: `Fix comments PR #${prNumber}`,
+      prNumber,
+      status: 'running',
+      createdAt: Date.now(),
+    };
+
+    const prompt = `Check and fix all unresolved review comments on PR #${prNumber} in ${this.repoInfo.owner}/${this.repoInfo.repo}.`;
+    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, 'wrench');
+    return taskInfo;
+  }
+
+  /** Run a custom command or prompt */
+  async runCommand(command: string): Promise<TaskInfo> {
+    const taskInfo: TaskInfo = {
+      id: `cmd-${Date.now()}`,
+      type: 'run-command',
+      label: command.substring(0, 40),
+      status: 'running',
+      createdAt: Date.now(),
+    };
+
+    this.launchTerminal(taskInfo, command, this.workspaceRoot, 'terminal');
+    return taskInfo;
+  }
+
   getAllTasks(): TaskInfo[] {
     return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  /** Kill a task (dispose its terminal) */
   killTask(taskId: string): void {
     const task = this.tasks.get(taskId);
     if (task?.terminal) {
@@ -135,7 +153,6 @@ export class TaskRunner {
     }
   }
 
-  /** Clean up worktree for a completed task */
   cleanupTask(taskId: string): void {
     const task = this.tasks.get(taskId);
     if (task?.terminal) {
@@ -149,7 +166,6 @@ export class TaskRunner {
     this.devPilotDir.log('tasks', `Task ${taskId} cleaned up`);
   }
 
-  /** Open a task's worktree in a new VS Code window */
   openWorktree(taskId: string): void {
     const task = this.tasks.get(taskId);
     if (task?.worktreeDir) {
@@ -158,12 +174,38 @@ export class TaskRunner {
     }
   }
 
-  /** Focus a task's terminal */
   focusTerminal(taskId: string): void {
     const task = this.tasks.get(taskId);
     if (task?.terminal) {
       task.terminal.show();
     }
+  }
+
+  private launchTerminal(taskInfo: TaskInfo, command: string, cwd: string, icon: string): void {
+    this.tasks.set(taskInfo.id, taskInfo);
+    this.devPilotDir.logJson('tasks', {
+      event: 'task_created',
+      taskId: taskInfo.id,
+      type: taskInfo.type,
+      label: taskInfo.label,
+    });
+
+    const terminal = vscode.window.createTerminal({
+      name: `Dev Pilot: ${taskInfo.label}`,
+      cwd,
+      iconPath: new vscode.ThemeIcon(icon),
+    });
+
+    terminal.show(false);
+    // Use gh copilot CLI
+    terminal.sendText(`gh copilot suggest "${this.escapeShell(command)}"`, true);
+
+    taskInfo.terminal = terminal;
+    this._onTasksChanged.fire();
+  }
+
+  private escapeShell(str: string): string {
+    return str.replace(/"/g, '\\"');
   }
 
   private extractIssueNumber(input: string): string | null {

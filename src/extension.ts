@@ -1,50 +1,53 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { DashboardViewProvider } from './dashboard-provider';
 import { WorktreeManager } from './worktree';
 import { TaskRunner } from './task-runner';
 import { FrameworkSync } from './framework-sync';
 import { GitHubDetector } from './github-detector';
 import { DevPilotDir } from './dev-pilot-dir';
-import { GitHubIssues } from './github-issues';
+import { GitHubData } from './github-data';
+import { TaskStateReader } from './task-state';
+import { SkillsReader } from './skills-reader';
+import { ReportGenerator } from './report';
 
 let dashboardProvider: DashboardViewProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Only activate if this workspace is a GitHub repo
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceRoot) return;
 
   const detector = new GitHubDetector();
   const repoInfo = detector.detect(workspaceRoot);
-  if (!repoInfo) {
-    // Not a GitHub repo — silently skip
-    return;
-  }
+  if (!repoInfo) return; // Not a GitHub repo
 
-  // Initialize .dev-pilot/ directory in workspace
+  // Initialize .dev-pilot/
   const devPilotDir = new DevPilotDir(workspaceRoot);
   devPilotDir.ensureDir();
   devPilotDir.ensureGitignore();
 
-  // Sync framework commands/agents if enabled
+  // Sync framework
   const frameworkSync = new FrameworkSync(context);
-  const autoSync = vscode.workspace.getConfiguration('devPilot').get('autoSyncFramework', true);
-  if (autoSync) {
+  if (vscode.workspace.getConfiguration('devPilot').get('autoSyncFramework', true)) {
     await frameworkSync.sync();
   }
 
+  // Core services
+  const ghData = new GitHubData(repoInfo.owner, repoInfo.repo);
   const worktree = new WorktreeManager();
-  const ghIssues = new GitHubIssues();
   const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, devPilotDir);
+  const taskStateReader = new TaskStateReader(devPilotDir.dir);
+  const skillsReader = new SkillsReader();
+  const reportGenerator = new ReportGenerator(ghData, devPilotDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
 
   dashboardProvider = new DashboardViewProvider(
     context.extensionUri,
     taskRunner,
     repoInfo,
     devPilotDir,
-    ghIssues,
+    ghData,
+    taskStateReader,
+    skillsReader,
+    reportGenerator,
   );
 
   context.subscriptions.push(
@@ -59,9 +62,7 @@ export async function activate(context: vscode.ExtensionContext) {
         prompt: 'Enter GitHub issue URL or #number',
         placeHolder: `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/123`,
       });
-      if (issueUrl) {
-        taskRunner.runDevIssue(issueUrl);
-      }
+      if (issueUrl) taskRunner.runDevIssue(issueUrl);
     }),
 
     vscode.commands.registerCommand('devPilot.watchPRs', () => {
@@ -73,7 +74,6 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Log activation
   devPilotDir.log('extension', `Activated for ${repoInfo.owner}/${repoInfo.repo}`);
 }
 
