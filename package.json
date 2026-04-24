@@ -1,0 +1,84 @@
+{
+  "name": "dev-pilot-vscode",
+  "displayName": "Dev Pilot",
+  "description": "AI engineering team dashboard — orchestrate Claude Code workflows with worktree isolation from VS Code",
+  "version": "0.1.0",
+  "publisher": "dev-pilot",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "devPilot.openDashboard",
+        "title": "Dev Pilot: Open Dashboard"
+      },
+      {
+        "command": "devPilot.devIssue",
+        "title": "Dev Pilot: Develop Issue"
+      },
+      {
+        "command": "devPilot.watchPRs",
+        "title": "Dev Pilot: Watch PRs"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devPilot",
+          "title": "Dev Pilot",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "devPilot": [
+        {
+          "type": "webview",
+          "id": "devPilot.dashboard",
+          "name": "Dashboard"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Dev Pilot",
+      "properties": {
+        "devPilot.claudeCodePath": {
+          "type": "string",
+          "default": "claude",
+          "description": "Path to Claude Code CLI binary"
+        },
+        "devPilot.pilotYamlPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to pilot.yaml (defaults to ~/.claude/pilot.yaml)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run compile -- --watch",
+    "lint": "eslint src --ext ts",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}
