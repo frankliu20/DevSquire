@@ -196,7 +196,7 @@ When the user asks to fix a comment:
    ```bash
    BRANCH="<headRefName>"
    ISSUE_ID=$(echo "$BRANCH" | grep -oP 'issue-\d+' || echo "pr-<number>")
-   WORKTREE=".worktrees/$ISSUE_ID"
+   WORKTREE=".squire/worktrees/$ISSUE_ID"
    if [ -d "$WORKTREE" ]; then
      cd "$WORKTREE" && git pull
    else

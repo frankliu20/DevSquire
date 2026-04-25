@@ -29,7 +29,7 @@ REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$|
 All operations use `gh` CLI (GitHub only).
 - The current directory is the workspace root (or worktree).
 - Logs are stored under `.squire/logs/`.
-- Worktrees are created under `.worktrees/`.
+- Worktrees are created under `.squire/worktrees/`.
 - **Always `cd` into the correct worktree directory before running any git/build/test commands.**
 
 **Status log**: Throughout every phase, write status updates to per-task log files under `.squire/logs/` (one file per task_id, e.g., `issue-123.jsonl`). These logs are the single source of truth for all task/PR progress.
@@ -116,7 +116,7 @@ The user provides ONE of:
 
 **Before creating anything, check if there's already work in progress for this issue.**
 
-Each issue gets its own **git worktree** at `.worktrees/issue-<N>/`, enabling parallel development across multiple issues.
+Each issue gets its own **git worktree** at `.squire/worktrees/issue-<N>/`, enabling parallel development across multiple issues.
 
 ### Determine base repo path
 
@@ -161,8 +161,8 @@ gh pr list --repo $REPO_SLUG \
   ```bash
   # already in repo
   git fetch origin
-  git worktree add ".worktrees/issue-<N>" origin/<branch>
-  cd ".worktrees/issue-<N>"
+  git worktree add ".squire/worktrees/issue-<N>" origin/<branch>
+  cd ".squire/worktrees/issue-<N>"
   ```
 
 **If an existing branch is found (no worktree, no PR):**
@@ -175,8 +175,8 @@ gh pr list --repo $REPO_SLUG \
 ```bash
 # already in repo
 git fetch origin
-git worktree add -b fix/issue-<number> ".worktrees/issue-<number>" origin/main
-cd ".worktrees/issue-<number>"
+git worktree add -b fix/issue-<number> ".squire/worktrees/issue-<number>" origin/main
+cd ".squire/worktrees/issue-<number>"
 ```
 Branch name: `fix/issue-<number>` (bug fix) or `feat/issue-<number>` (feature)
 
@@ -185,8 +185,8 @@ Branch name: `fix/issue-<number>` (bug fix) or `feat/issue-<number>` (feature)
 # already in repo
 git fetch origin
 TASK_ID="adhoc-$(date +%Y%m%d-%H%M%S)"
-git worktree add -b fix/$TASK_ID ".worktrees/$TASK_ID" origin/main
-cd ".worktrees/$TASK_ID"
+git worktree add -b fix/$TASK_ID ".squire/worktrees/$TASK_ID" origin/main
+cd ".squire/worktrees/$TASK_ID"
 ```
 Branch name: `fix/adhoc-20260405-143022` or `feat/adhoc-20260405-143022`
 

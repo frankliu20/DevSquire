@@ -79,6 +79,48 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically fix unresolved review comments on your PRs"
+        },
+        "devSquire.devIssue.mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["normal", "auto"],
+          "enumDescriptions": [
+            "Pause for plan approval and test strategy selection",
+            "Run the entire pipeline without stopping"
+          ],
+          "description": "Default mode for dev-issue tasks"
+        },
+        "devSquire.fixComments.mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["normal", "auto"],
+          "enumDescriptions": [
+            "Pause for confirmation before pushing fixes",
+            "Automatically fix and push without stopping"
+          ],
+          "description": "Default mode for fix-comments tasks"
+        },
+        "devSquire.reviewPR.strategy": {
+          "type": "string",
+          "default": "normal",
+          "enum": ["normal", "auto-publish", "quick-approve"],
+          "enumDescriptions": [
+            "Present findings and wait for user action",
+            "Automatically publish review comments to GitHub",
+            "Approve if no critical issues, otherwise request changes"
+          ],
+          "description": "Default review strategy"
+        },
+        "devSquire.reviewPR.level": {
+          "type": "string",
+          "default": "important",
+          "enum": ["critical", "important", "everything"],
+          "enumDescriptions": [
+            "Only report must-fix issues (bugs, security)",
+            "Report must-fix and should-consider issues",
+            "Report all findings including minor suggestions"
+          ],
+          "description": "Default review detail level"
         }
       }
     }

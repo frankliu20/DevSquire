@@ -65,7 +65,8 @@ export class TaskRunner {
   }
 
   /** Run /squire-dev-issue — matches dashboard assign command */
-  async runDevIssue(issueInput: string, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
+  async runDevIssue(issueInput: string, mode?: 'normal' | 'auto'): Promise<TaskInfo> {
+    const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('devIssue.mode', 'auto') as 'normal' | 'auto';
     const issueNum = this.extractIssueNumber(issueInput);
     const issueUrl = issueNum
       ? `${this.repoUrl}/issues/${issueNum}`
@@ -80,7 +81,7 @@ export class TaskRunner {
       ? `Copilot: #${issueNum}`
       : `Copilot: dev-issue-adhoc-${Date.now()}`;
 
-    const autoFlag = mode === 'auto' ? '--auto ' : '';
+    const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
     const agentArgs: AgentLaunch = {
       agent: 'squire-dev-issue',
       initialPrompt: `${autoFlag}${issueUrl}`,
@@ -123,18 +124,21 @@ export class TaskRunner {
   }
 
   /** Review a PR via squire-pr-reviewer agent */
-  async runReviewPR(prNumber: number, config: ReviewConfig): Promise<TaskInfo> {
+  async runReviewPR(prNumber: number, config?: Partial<ReviewConfig>): Promise<TaskInfo> {
+    const cfg = vscode.workspace.getConfiguration('devSquire');
+    const strategy = config?.strategy || cfg.get<string>('reviewPR.strategy', 'normal') as ReviewConfig['strategy'];
+    const level = config?.level || cfg.get<string>('reviewPR.level', 'important') as ReviewConfig['level'];
     const prUrl = `${this.repoUrl}/pull/${prNumber}`;
 
     let strategySuffix = '';
-    if (config.strategy === 'quick-approve') strategySuffix = ' [Quick Approve]';
-    else if (config.strategy === 'auto-publish') strategySuffix = ' [Auto]';
+    if (strategy === 'quick-approve') strategySuffix = ' [Quick Approve]';
+    else if (strategy === 'auto-publish') strategySuffix = ' [Auto]';
 
     const terminalTitle = `Copilot: Review PR #${prNumber}${strategySuffix}`;
 
     const agentArgs: AgentLaunch = {
       agent: 'squire-pr-reviewer',
-      initialPrompt: `Review this PR: ${prUrl} --strategy ${config.strategy} --level ${config.level}`,
+      initialPrompt: `Review this PR: ${prUrl} --strategy ${strategy} --level ${level}`,
     };
 
     const taskInfo: TaskInfo = {
@@ -151,8 +155,9 @@ export class TaskRunner {
   }
 
   /** Fix PR comments via squire-dev-issue agent */
-  async runFixComments(prNumber: number, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
-    const autoFlag = mode === 'auto' ? '--auto ' : '';
+  async runFixComments(prNumber: number, mode?: 'normal' | 'auto'): Promise<TaskInfo> {
+    const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('fixComments.mode', 'auto') as 'normal' | 'auto';
+    const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
     const agentArgs: AgentLaunch = {
       agent: 'squire-dev-issue',
       initialPrompt: `${autoFlag}check open comments on ${this.repoUrl}/pull/${prNumber} and fix them`,

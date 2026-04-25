@@ -27,10 +27,10 @@ export class WorktreeManager {
 
   /**
    * Create a new worktree for a task.
-   * Convention: .worktrees/<branch-name>
+   * Convention: .squire/worktrees/<branch-name>
    */
   create(repoDir: string, branchName: string, baseBranch = 'main'): WorktreeInfo | null {
-    const worktreeDir = path.join(repoDir, '.worktrees', branchName);
+    const worktreeDir = path.join(repoDir, '.squire/worktrees', branchName);
 
     if (fs.existsSync(worktreeDir)) {
       // Already exists — return info
@@ -39,8 +39,8 @@ export class WorktreeManager {
     }
 
     try {
-      // Ensure .worktrees directory exists
-      const worktreesRoot = path.join(repoDir, '.worktrees');
+      // Ensure .squire/worktrees directory exists
+      const worktreesRoot = path.join(repoDir, '.squire/worktrees');
       if (!fs.existsSync(worktreesRoot)) {
         fs.mkdirSync(worktreesRoot, { recursive: true });
       }
@@ -70,7 +70,7 @@ export class WorktreeManager {
    * Remove a worktree.
    */
   remove(repoDir: string, branchName: string, force = false): boolean {
-    const worktreeDir = path.join(repoDir, '.worktrees', branchName);
+    const worktreeDir = path.join(repoDir, '.squire/worktrees', branchName);
     try {
       const forceFlag = force ? ' --force' : '';
       cp.execSync(`git worktree remove "${worktreeDir}"${forceFlag}`, {
@@ -90,11 +90,11 @@ export class WorktreeManager {
   }
 
   /**
-   * Ensure .worktrees is in .gitignore
+   * Ensure .squire/worktrees is in .gitignore
    */
   ensureGitignore(repoDir: string): void {
     const gitignorePath = path.join(repoDir, '.gitignore');
-    const entry = '.worktrees/';
+    const entry = '.squire/worktrees/';
 
     try {
       let content = '';
