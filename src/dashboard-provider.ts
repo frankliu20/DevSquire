@@ -43,30 +43,34 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
   private async handleMessage(msg: any): Promise<void> {
     switch (msg.type) {
-      // --- Issues ---
+      // --- Issues (always assigned to me) ---
       case 'getIssues': {
-        const issues = msg.filter === 'mine'
-          ? this.ghData.listMyIssues()
-          : this.ghData.listIssues();
-        this.post('issues', issues);
+        // Run async to avoid blocking webview
+        setImmediate(() => {
+          const issues = this.ghData.listMyIssues();
+          this.post('issues', issues);
+        });
         break;
       }
       case 'getIssueBody': {
-        const body = this.ghData.getIssueBody(msg.number);
-        this._view?.webview.postMessage({ type: 'issueBody', number: msg.number, body });
+        setImmediate(() => {
+          const body = this.ghData.getIssueBody(msg.number);
+          this._view?.webview.postMessage({ type: 'issueBody', number: msg.number, body });
+        });
         break;
       }
 
       // --- PRs ---
       case 'getPRs': {
-        const mine = this.ghData.listMyPRs();
-        const review = this.ghData.listReviewRequestedPRs();
-        // Fetch unresolved counts for own PRs
-        const unresolvedMap = this.ghData.getUnresolvedCounts(mine.map((p) => p.number));
-        for (const pr of mine) {
-          pr.unresolvedCount = unresolvedMap.get(pr.number) || 0;
-        }
-        this.post('prs', { mine, review });
+        setImmediate(() => {
+          const mine = this.ghData.listMyPRs();
+          const review = this.ghData.listReviewRequestedPRs();
+          const unresolvedMap = this.ghData.getUnresolvedCounts(mine.map((p) => p.number));
+          for (const pr of mine) {
+            pr.unresolvedCount = unresolvedMap.get(pr.number) || 0;
+          }
+          this.post('prs', { mine, review });
+        });
         break;
       }
 
@@ -130,13 +134,15 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
       // --- Report ---
       case 'getReport': {
-        if (msg.view === 'scrum') {
-          const scrum = this.reportGenerator.generateScrum();
-          this._view?.webview.postMessage({ type: 'scrumReport', data: scrum });
-        } else {
-          const eod = this.reportGenerator.generateEOD();
-          this._view?.webview.postMessage({ type: 'eodReport', data: eod });
-        }
+        setImmediate(() => {
+          if (msg.view === 'scrum') {
+            const scrum = this.reportGenerator.generateScrum();
+            this._view?.webview.postMessage({ type: 'scrumReport', data: scrum });
+          } else {
+            const eod = this.reportGenerator.generateEOD();
+            this._view?.webview.postMessage({ type: 'eodReport', data: eod });
+          }
+        });
         break;
       }
       case 'postScrum': {

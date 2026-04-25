@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { DevPilotDir } from './dev-pilot-dir';
-import * as path from 'path';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command';
 
@@ -47,17 +46,32 @@ export class TaskRunner {
     });
   }
 
-  /** Run /pilot-dev-issue for a given issue */
+  get repoSlug(): string {
+    return `${this.repoInfo.owner}/${this.repoInfo.repo}`;
+  }
+
+  get repoUrl(): string {
+    return `https://github.com/${this.repoSlug}`;
+  }
+
+  /** Run /pilot-dev-issue — matches dashboard assign command */
   async runDevIssue(issueInput: string, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
     const issueNum = this.extractIssueNumber(issueInput);
     const issueUrl = issueNum
-      ? `https://github.com/${this.repoInfo.owner}/${this.repoInfo.repo}/issues/${issueNum}`
+      ? `${this.repoUrl}/issues/${issueNum}`
       : issueInput;
 
     const branchName = issueNum ? `dev/issue-${issueNum}` : `dev/task-${Date.now()}`;
 
     this.worktree.ensureGitignore(this.workspaceRoot);
     const wt = this.worktree.create(this.workspaceRoot, branchName);
+
+    const terminalTitle = issueNum
+      ? `Copilot: #${issueNum}`
+      : `Copilot: dev-issue-adhoc-${Date.now()}`;
+
+    const autoFlag = mode === 'auto' ? ' --auto' : '';
+    const prompt = `/pilot-dev-issue${autoFlag} ${issueUrl}`;
 
     const taskInfo: TaskInfo = {
       id: `dev-${Date.now()}`,
@@ -71,10 +85,7 @@ export class TaskRunner {
     };
 
     const cwd = wt?.path || this.workspaceRoot;
-    const autoFlag = mode === 'auto' ? ' --auto' : '';
-    const command = `/pilot-dev-issue${autoFlag} ${issueUrl}`;
-
-    this.launchTerminal(taskInfo, command, cwd, 'rocket');
+    this.launchTerminal(taskInfo, prompt, cwd, terminalTitle, 'rocket');
     return taskInfo;
   }
 
@@ -88,12 +99,22 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, '/pilot-watch-pr', this.workspaceRoot, 'eye');
+    this.launchTerminal(taskInfo, '/pilot-watch-pr', this.workspaceRoot, 'Copilot: Watch PRs', 'eye');
     return taskInfo;
   }
 
-  /** Review a PR */
+  /** Review a PR — matches dashboard review-pr command */
   async runReviewPR(prNumber: number, config: ReviewConfig): Promise<TaskInfo> {
+    const prUrl = `${this.repoUrl}/pull/${prNumber}`;
+
+    let strategySuffix = '';
+    if (config.strategy === 'quick-approve') strategySuffix = ' [Quick Approve]';
+    else if (config.strategy === 'auto-publish') strategySuffix = ' [Auto]';
+
+    const terminalTitle = `Copilot: Review PR #${prNumber}${strategySuffix}`;
+
+    const prompt = `Use the pilot-pr-reviewer agent to review this PR: ${prUrl} --strategy ${config.strategy} --level ${config.level}`;
+
     const taskInfo: TaskInfo = {
       id: `review-${Date.now()}`,
       type: 'review-pr',
@@ -103,13 +124,16 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    const prompt = `Review PR #${prNumber} in ${this.repoInfo.owner}/${this.repoInfo.repo}. Strategy: ${config.strategy}. Level: ${config.level}. Provide a thorough code review.`;
-    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, 'code-review');
+    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, terminalTitle, 'code-review');
     return taskInfo;
   }
 
-  /** Fix PR comments */
-  async runFixComments(prNumber: number): Promise<TaskInfo> {
+  /** Fix PR comments — matches dashboard fix-comments command */
+  async runFixComments(prNumber: number, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
+    const autoFlag = mode === 'auto' ? ' --auto' : '';
+    const prompt = `/pilot-dev-issue${autoFlag} check open comments on ${this.repoUrl}/pull/${prNumber} and fix them`;
+    const terminalTitle = `Copilot: Fix PR #${prNumber} comments`;
+
     const taskInfo: TaskInfo = {
       id: `fix-${Date.now()}`,
       type: 'fix-comments',
@@ -119,22 +143,26 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    const prompt = `Check and fix all unresolved review comments on PR #${prNumber} in ${this.repoInfo.owner}/${this.repoInfo.repo}.`;
-    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, 'wrench');
+    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, terminalTitle, 'wrench');
     return taskInfo;
   }
 
-  /** Run a custom command or prompt */
+  /** Run a custom command or prompt — matches dashboard run-command */
   async runCommand(command: string): Promise<TaskInfo> {
+    const label = command.startsWith('/')
+      ? command.split(' ')[0]
+      : command.substring(0, 40) + (command.length > 40 ? '…' : '');
+    const terminalTitle = `Copilot: ${label}`;
+
     const taskInfo: TaskInfo = {
       id: `cmd-${Date.now()}`,
       type: 'run-command',
-      label: command.substring(0, 40),
+      label,
       status: 'running',
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, command, this.workspaceRoot, 'terminal');
+    this.launchTerminal(taskInfo, command, this.workspaceRoot, terminalTitle, 'terminal');
     return taskInfo;
   }
 
@@ -181,7 +209,11 @@ export class TaskRunner {
     }
   }
 
-  private launchTerminal(taskInfo: TaskInfo, command: string, cwd: string, icon: string): void {
+  /**
+   * Launch a VS Code terminal with the copilot CLI command.
+   * Command format matches dashboard: copilot -i "<prompt>" --allow-all
+   */
+  private launchTerminal(taskInfo: TaskInfo, prompt: string, cwd: string, terminalTitle: string, icon: string): void {
     this.tasks.set(taskInfo.id, taskInfo);
     this.devPilotDir.logJson('tasks', {
       event: 'task_created',
@@ -191,21 +223,19 @@ export class TaskRunner {
     });
 
     const terminal = vscode.window.createTerminal({
-      name: `Dev Pilot: ${taskInfo.label}`,
+      name: terminalTitle,
       cwd,
       iconPath: new vscode.ThemeIcon(icon),
     });
 
     terminal.show(false);
-    // Use gh copilot CLI
-    terminal.sendText(`gh copilot suggest "${this.escapeShell(command)}"`, true);
+
+    // Match dashboard command format: copilot -i "<prompt>" --allow-all
+    const sanitizedPrompt = prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
+    terminal.sendText(`copilot -i "${sanitizedPrompt}" --allow-all`, true);
 
     taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
-  }
-
-  private escapeShell(str: string): string {
-    return str.replace(/"/g, '\\"');
   }
 
   private extractIssueNumber(input: string): string | null {
