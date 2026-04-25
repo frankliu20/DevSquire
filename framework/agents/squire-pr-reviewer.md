@@ -17,22 +17,10 @@ You are a code review specialist. The user gives you a PR URL (or number). Your 
 
 ## Workspace
 
-Read `~/.claude/pilot.yaml` and extract the `workspace` field as `$WS` and `platform`.
+GitHub only. Use `gh` CLI for all PR operations. Extract repo from the PR URL.
 ```bash
-WS=$(grep '^workspace:' ~/.claude/pilot.yaml | awk '{print $2}' | sed "s|^~|$HOME|")
-PLATFORM=$(grep '^platform:' ~/.claude/pilot.yaml | awk '{print $2}')
-PLATFORM=${PLATFORM:-github}
+REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
 ```
-
-### Platform CLI mapping
-
-| Platform | CLI | PR view | PR diff | PR review | GraphQL |
-|----------|-----|---------|---------|-----------|---------|
-| github | `gh` | `gh pr view` | `gh pr diff` | `gh pr review` | `gh api graphql` |
-| gitlab | `glab` | `glab mr view` | `glab mr diff` | `glab mr approve` | N/A |
-| azdevops | `az` | `az repos pr show` | `az repos pr diff` | `az repos pr set-vote` | N/A |
-
-Use the correct CLI based on `$PLATFORM`. GraphQL features (review threads, resolve thread mutations) are only available on GitHub. On other platforms, skip GraphQL-dependent features.
 
 ## Review Configuration
 
@@ -206,12 +194,9 @@ When the user asks to fix a comment:
 
 1. Find or create a worktree for the PR branch:
    ```bash
-   # Determine the local repo clone path from the PR URL's repo name
-   REPO_DIR="$WS/$REPO_NAME"
-   cd "$REPO_DIR"
    BRANCH="<headRefName>"
    ISSUE_ID=$(echo "$BRANCH" | grep -oP 'issue-\d+' || echo "pr-<number>")
-   WORKTREE="$WS/worktrees/$ISSUE_ID"
+   WORKTREE=".worktrees/$ISSUE_ID"
    if [ -d "$WORKTREE" ]; then
      cd "$WORKTREE" && git pull
    else
@@ -221,7 +206,7 @@ When the user asks to fix a comment:
    fi
    ```
 2. Make the fix
-3. Verify: run the build command from `~/.claude/pilot.yaml` (`build.command`, default: `npm run build`)
+3. Verify: run the build command from `.squire/config.yaml` (`build.command`, default: `npm run build`)
 4. Commit and push:
    ```bash
    git add <files>

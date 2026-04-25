@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
-import { DevSquireDir } from './devsquire-dir';
+import { SquireDir } from './squire-dir';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command';
 
@@ -42,7 +42,7 @@ export class TaskRunner {
     private worktree: WorktreeManager,
     private workspaceRoot: string,
     private repoInfo: GitHubRepoInfo,
-    private devSquireDir: DevSquireDir,
+    private squireDir: SquireDir,
   ) {
     vscode.window.onDidCloseTerminal((closedTerminal) => {
       for (const task of this.tasks.values()) {
@@ -50,7 +50,7 @@ export class TaskRunner {
           task.status = 'completed';
           task.terminal = undefined;
           this._onTasksChanged.fire();
-          this.devSquireDir.log('tasks', `Task ${task.id} (${task.label}) terminal closed`);
+          this.squireDir.log('tasks', `Task ${task.id} (${task.label}) terminal closed`);
         }
       }
     });
@@ -112,7 +112,13 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, { agent: 'squire-watch-pr' }, this.workspaceRoot, 'Copilot: Watch PRs', 'eye');
+    const autoFixCI = vscode.workspace.getConfiguration('devSquire').get('watchPR.autoFixCI', true);
+    const autoFixComments = vscode.workspace.getConfiguration('devSquire').get('watchPR.autoFixComments', false);
+
+    this.launchTerminal(taskInfo, {
+      agent: 'squire-watch-pr',
+      initialPrompt: `Repo: ${this.repoSlug}. Auto-fix CI: ${autoFixCI ? 'on' : 'off'}. Auto-fix comments: ${autoFixComments ? 'on' : 'off'}.`,
+    }, this.workspaceRoot, 'Copilot: Watch PRs', 'eye');
     return taskInfo;
   }
 
@@ -196,7 +202,7 @@ export class TaskRunner {
       task.status = 'failed';
       task.terminal = undefined;
       this._onTasksChanged.fire();
-      this.devSquireDir.log('tasks', `Task ${taskId} killed by user`);
+      this.squireDir.log('tasks', `Task ${taskId} killed by user`);
     }
   }
 
@@ -210,7 +216,7 @@ export class TaskRunner {
     }
     this.tasks.delete(taskId);
     this._onTasksChanged.fire();
-    this.devSquireDir.log('tasks', `Task ${taskId} cleaned up`);
+    this.squireDir.log('tasks', `Task ${taskId} cleaned up`);
   }
 
   openWorktree(taskId: string): void {
@@ -236,7 +242,7 @@ export class TaskRunner {
    */
   private launchTerminal(taskInfo: TaskInfo, launch: AgentLaunch, cwd: string, terminalTitle: string, icon: string): void {
     this.tasks.set(taskInfo.id, taskInfo);
-    this.devSquireDir.logJson('tasks', {
+    this.squireDir.logJson('tasks', {
       event: 'task_created',
       taskId: taskInfo.id,
       type: taskInfo.type,

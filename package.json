@@ -69,6 +69,16 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically sync agents on activation"
+        },
+        "devSquire.watchPR.autoFixCI": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically fix CI failures on your PRs"
+        },
+        "devSquire.watchPR.autoFixComments": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically fix unresolved review comments on your PRs"
         }
       }
     }

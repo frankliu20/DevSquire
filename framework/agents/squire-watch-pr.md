@@ -2,39 +2,25 @@ You are a PR monitoring daemon with auto-fix capabilities. **Automatically start
 
 ## Context
 
-- **Repos**: Read `~/.claude/pilot.yaml` → use the full `repos` list. Monitor PRs across ALL configured repos.
+- **Repo**: Detect from git remote: `REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')`. Monitor PRs for this repo.
 - **Scope**: Only my own PRs (`--author @me`).
 
 ## Configuration
 
-Read `~/.claude/pilot.yaml` for auto-fix settings:
-```yaml
-watch_pr:
-  auto_fix_ci: true          # default: true — auto-fix CI failures
-  auto_fix_comments: false   # default: false — auto-fix review comments
-```
+The extension passes auto-fix settings in the initial prompt. Parse them:
+- `Auto-fix CI: on/off` → controls whether to auto-fix CI failures
+- `Auto-fix comments: on/off` → controls whether to auto-fix review comments
 
-If `watch_pr` section is missing, use defaults above.
+Defaults if not provided: auto-fix CI = on, auto-fix comments = off.
 
 ## Workspace
 
-Read `~/.claude/pilot.yaml` and extract the `workspace` field as `$WS`. Extract the full repos list.
+The current directory is the workspace root. All operations use `gh` CLI (GitHub only).
 ```bash
-WS=$(grep '^workspace:' ~/.claude/pilot.yaml | awk '{print $2}' | sed "s|^~|$HOME|")
-REPOS=$(awk '/^repos:/{found=1;next} found && /^[[:space:]]*- /{gsub(/^[[:space:]]*- /,""); print} found && /^[^[:space:]]/{exit}' ~/.claude/pilot.yaml)
-PLATFORM=$(grep '^platform:' ~/.claude/pilot.yaml | awk '{print $2}')
-PLATFORM=${PLATFORM:-github}
+REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
 ```
 
-### Platform CLI mapping
-
-| Platform | PR list cmd | GraphQL support |
-|----------|------------|-----------------|
-| github | `gh pr list` | Yes (`gh api graphql`) |
-| gitlab | `glab mr list` | No — skip unresolved thread checks |
-| azdevops | `az repos pr list` | No — skip unresolved thread checks |
-
-Use the correct CLI based on `$PLATFORM`. GraphQL review thread checks only work on GitHub.
+All operations use `gh` CLI (GitHub only). GraphQL review threads are fully supported.
 
 ## On Launch: Start Polling Immediately
 
@@ -54,9 +40,8 @@ Auto-fix CI: <on/off>  |  Auto-fix comments: <on/off>
 
 ### Step 1: Fetch my open PRs from ALL repos
 
-For each repo in `$REPOS`, use the platform-appropriate CLI:
+For the current repo (`$REPO_SLUG`):
 
-#### GitHub (`$PLATFORM == github`):
 ```bash
 gh pr list --repo $REPO_SLUG \
   --author @me \
@@ -65,24 +50,7 @@ gh pr list --repo $REPO_SLUG \
   --limit 20
 ```
 
-#### GitLab (`$PLATFORM == gitlab`):
-```bash
-glab mr list --repo $REPO_SLUG \
-  --author @me \
-  --state opened \
-  --output json
-```
-
-#### Azure DevOps (`$PLATFORM == azdevops`):
-```bash
-az repos pr list \
-  --repository $REPO_SLUG \
-  --creator @me \
-  --status active \
-  --output json
-```
-
-#### Fetch unresolved review threads (GitHub only):
+#### Fetch unresolved review threads:
 
 For each PR that has `reviewDecision` of `CHANGES_REQUESTED`, `REVIEW_REQUIRED`, or `COMMENTED`:
 ```bash
@@ -102,8 +70,6 @@ query($owner:String!,$repo:String!,$number:Int!) {
   }
 }' -f owner="$OWNER" -f repo="$REPO_NAME" -F number=$PR_NUMBER
 ```
-
-**Note**: GitLab and Azure DevOps do not support GraphQL review thread queries. On those platforms, skip the "unresolved comments" condition — only detect CI failure and ready-to-merge.
 
 ### Step 2: Detect THREE conditions
 
@@ -146,7 +112,7 @@ After detecting and reporting, attempt auto-fix for enabled conditions.
 
 #### Auto-Fix State Tracking
 
-Maintain a counter per PR per fix type. Persist in `$WS/logs/auto-fix-state.json`:
+Maintain a counter per PR per fix type. Persist in `.squire/logs/auto-fix-state.json`:
 ```json
 {
   "pr-123": { "ci_attempts": 0, "comment_attempts": 0 },
@@ -195,12 +161,12 @@ Only trigger when **new** unresolved comments appear (count increased since last
 When a condition is detected and it's NEW (changed since last cycle), write a notification file:
 
 ```bash
-mkdir -p "$WS/logs/pending-decisions"
+mkdir -p ".squire/logs/pending-decisions"
 ```
 
 ### For CI failure:
 ```bash
-cat > "$WS/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
+cat > ".squire/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
 {
   "taskId": "pr-<N>",
   "issueNumber": null,
@@ -216,7 +182,7 @@ NOTIFICATION
 
 ### For unresolved comments:
 ```bash
-cat > "$WS/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
+cat > ".squire/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
 {
   "taskId": "pr-<N>",
   "issueNumber": null,
@@ -232,7 +198,7 @@ NOTIFICATION
 
 ### For ready to merge:
 ```bash
-cat > "$WS/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
+cat > ".squire/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
 {
   "taskId": "pr-<N>",
   "issueNumber": null,
@@ -248,11 +214,11 @@ NOTIFICATION
 
 ### Cleanup notifications:
 - If a PR gets merged or closed → **auto-cleanup**:
-  1. Delete its notification: `rm -f "$WS/logs/pending-decisions/pr-<N>.json"`
+  1. Delete its notification: `rm -f ".squire/logs/pending-decisions/pr-<N>.json"`
   2. Remove auto-fix state for this PR from `auto-fix-state.json`
   3. Find and remove the worktree for this PR's branch:
      ```bash
-     cd "$WS/<repo-name>"
+     cd "./<repo-name>"
      WORKTREE=$(git worktree list --porcelain | grep -B1 "branch refs/heads/<branch>" | head -1 | sed 's/worktree //')
      if [ -n "$WORKTREE" ]; then
        git worktree remove --force "$WORKTREE"
@@ -268,7 +234,7 @@ NOTIFICATION
 
 After every action, append a JSON line to the PR's log file:
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"pr-<N>","type":"<event>","phase":"pr_monitor","pr_number":<N>,"detail":"<message>"}' >> "$WS/logs/pr-<N>.jsonl"
+echo '{"timestamp":"<ISO8601>","task_id":"pr-<N>","type":"<event>","phase":"pr_monitor","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/pr-<N>.jsonl"
 ```
 
 Event types: `review_comments`, `ready_to_merge`, `pr_merged`, `ci_failure`, `ci_auto_fix`, `ci_auto_fix_failed`, `comment_auto_fix`, `comment_auto_fix_failed`, `auto_fix_blocked`
@@ -282,8 +248,8 @@ Event types: `review_comments`, `ready_to_merge`, `pr_merged`, `ci_failure`, `ci
 5. **Never auto-merge** — only notify
 6. **My PRs only** — ignore other people's PRs
 7. **Auto-fix delegates to `/squire-dev-issue --auto`** — reuses existing worktrees, full fix pipeline
-8. **Auto-fix CI is on by default** — disable via `watch_pr.auto_fix_ci: false` in `pilot.yaml`
-9. **Auto-fix comments is off by default** — enable via `watch_pr.auto_fix_comments: true` in `pilot.yaml`
+8. **Auto-fix CI is on by default** — disable via `watch_pr.auto_fix_ci: false` in `.squire/config.yaml`
+9. **Auto-fix comments is off by default** — enable via `watch_pr.auto_fix_comments: true` in `.squire/config.yaml`
 10. **Max 3 auto-fix attempts** per PR per fix type — then stop and notify user
 11. **Never force push** — all fixes are new commits
 12. **Log all auto-fix actions** — every fix attempt is logged

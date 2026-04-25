@@ -4,7 +4,8 @@ import { WorktreeManager } from './worktree';
 import { TaskRunner } from './task-runner';
 import { FrameworkSync } from './framework-sync';
 import { GitHubDetector } from './github-detector';
-import { DevSquireDir } from './devsquire-dir';
+import { SquireDir } from './squire-dir';
+import { SquireConfigManager } from './squire-config';
 import { GitHubData } from './github-data';
 import { TaskStateReader } from './task-state';
 import { SkillsReader } from './skills-reader';
@@ -20,10 +21,14 @@ export async function activate(context: vscode.ExtensionContext) {
   const repoInfo = detector.detect(workspaceRoot);
   if (!repoInfo) return; // Not a GitHub repo
 
-  // Initialize .devsquire/
-  const devSquireDir = new DevSquireDir(workspaceRoot);
-  devSquireDir.ensureDir();
-  devSquireDir.ensureGitignore();
+  // Initialize .squire/
+  const squireDir = new SquireDir(workspaceRoot);
+  squireDir.ensureDir();
+  squireDir.ensureGitignore();
+
+  // Initialize project config (.squire/config.yaml)
+  const squireConfig = new SquireConfigManager(squireDir.dir, workspaceRoot);
+  squireConfig.ensureConfig();
 
   // Sync framework
   const frameworkSync = new FrameworkSync(context);
@@ -34,16 +39,16 @@ export async function activate(context: vscode.ExtensionContext) {
   // Core services
   const ghData = new GitHubData(repoInfo.owner, repoInfo.repo);
   const worktree = new WorktreeManager();
-  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, devSquireDir);
-  const taskStateReader = new TaskStateReader(devSquireDir.dir);
+  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, squireDir);
+  const taskStateReader = new TaskStateReader(squireDir.dir);
   const skillsReader = new SkillsReader();
-  const reportGenerator = new ReportGenerator(ghData, devSquireDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
+  const reportGenerator = new ReportGenerator(ghData, squireDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
 
   dashboardProvider = new DashboardViewProvider(
     context.extensionUri,
     taskRunner,
     repoInfo,
-    devSquireDir,
+    squireDir,
     ghData,
     taskStateReader,
     skillsReader,
@@ -74,7 +79,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  devSquireDir.log('extension', `Activated for ${repoInfo.owner}/${repoInfo.repo}`);
+  squireDir.log('extension', `Activated for ${repoInfo.owner}/${repoInfo.repo}`);
 }
 
 export function deactivate() {}

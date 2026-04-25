@@ -7,7 +7,7 @@ Check if the user's prompt contains `--auto` (e.g., `/squire-dev-issue --auto ht
 - **Normal mode** (default): Run the full pipeline with minimal interruption. Only stop for: (1) Phase 3 plan approval + test strategy, (2) unclear requirements needing clarification, (3) test failures after 3 auto-fix rounds, (4) manual verification if strategy 3 was chosen. Everything else proceeds automatically.
 - **Auto mode** (`--auto`): Run the entire pipeline without stopping. No user prompts, no confirmations. Defaults: test strategy 1 (build only), auto-approve plan, skip knowledge capture. If anything fails after 3 auto-fix rounds, log `blocked` and stop silently.
 
-Also check for `--test-scenario <id>` where `<id>` matches a scenario defined in `pilot.yaml` under `test_scenarios` (e.g., `vscode`, `server`, etc.).
+Also check for `--test-scenario <id>` where `<id>` matches a scenario defined in `.squire/config.yaml` under `test_scenarios` (e.g., `vscode`, `server`, etc.).
 
 - If `--test-scenario <id>` is provided with a known id → auto-select test strategy **3** with that scenario
 - If `--test-scenario <id>` is provided with an unknown id → warn the user and prompt as normal in Phase 3
@@ -21,35 +21,25 @@ Strip `--auto` and `--test-scenario <id>` from the input before processing the i
 
 ## Workspace
 
-First, read `~/.claude/pilot.yaml` and extract the `workspace` field as `$WS`. Also extract `repos[0]` as `$REPO_SLUG` and the `platform` field.
+Detect the repo slug from git remote:
 ```bash
-WS=$(grep '^workspace:' ~/.claude/pilot.yaml | awk '{print $2}' | sed "s|^~|$HOME|")
-REPO_SLUG=$(grep -A1 '^repos:' ~/.claude/pilot.yaml | tail -1 | sed 's/^[[:space:]]*- //')
-PLATFORM=$(grep '^platform:' ~/.claude/pilot.yaml | awk '{print $2}')
-PLATFORM=${PLATFORM:-github}
+REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
 ```
 
-### Platform CLI mapping
-
-| Platform | CLI | Issue cmd | PR/MR cmd | PR check cmd |
-|----------|-----|-----------|-----------|--------------|
-| github | `gh` | `gh issue view` | `gh pr create` | `gh pr list` |
-| gitlab | `glab` | `glab issue view` | `glab mr create` | `glab mr list` |
-| azdevops | `az` | `az boards work-item show` | `az repos pr create` | `az repos pr list` |
-
-Use the correct CLI binary based on `$PLATFORM` throughout all commands below.
-- All logs are stored under `$WS/logs/`.
-- Base repo is cloned under `$WS/<repo-name>/`. Worktrees are created under `$WS/worktrees/`.
+All operations use `gh` CLI (GitHub only).
+- The current directory is the workspace root (or worktree).
+- Logs are stored under `.squire/logs/`.
+- Worktrees are created under `.worktrees/`.
 - **Always `cd` into the correct worktree directory before running any git/build/test commands.**
 
-**Status log**: Throughout every phase, write status updates to per-task log files under `$WS/logs/` (one file per task_id, e.g., `issue-123.jsonl`). These logs are the single source of truth for all task/PR progress.
+**Status log**: Throughout every phase, write status updates to per-task log files under `.squire/logs/` (one file per task_id, e.g., `issue-123.jsonl`). These logs are the single source of truth for all task/PR progress.
 
 ## Status Logging
 
-At every phase transition, append a JSON line to the task's log file `<workspace>/logs/<task_id>.jsonl`:
+At every phase transition, append a JSON line to the task's log file `.squire/logs/<task_id>.jsonl`:
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"issue-<N>|adhoc-<date>","type":"<event_type>","phase":"<phase>","branch":"<branch>","pr_number":<N|null>,"status":"<status>","detail":"<message>"}' >> "$WS/logs/issue-<N>.jsonl"
-# For adhoc tasks: >> "$WS/logs/adhoc-<date>.jsonl"
+echo '{"timestamp":"<ISO8601>","task_id":"issue-<N>|adhoc-<date>","type":"<event_type>","phase":"<phase>","branch":"<branch>","pr_number":<N|null>,"status":"<status>","detail":"<message>"}' >> ".squire/logs/issue-<N>.jsonl"
+# For adhoc tasks: >> ".squire/logs/adhoc-<date>.jsonl"
 ```
 
 Event types and when to log:
@@ -85,10 +75,10 @@ If you are about to use `AskUserQuestion`, present options, or end your turn wit
 
 ### How it works
 
-1. **Write a decision request file** to `$WS/logs/pending-decisions/<task_id>.json`:
+1. **Write a decision request file** to `.squire/logs/pending-decisions/<task_id>.json`:
 ```bash
-mkdir -p "$WS/logs/pending-decisions"
-cat > "$WS/logs/pending-decisions/<task_id>.json" << 'DECISION'
+mkdir -p ".squire/logs/pending-decisions"
+cat > ".squire/logs/pending-decisions/<task_id>.json" << 'DECISION'
 {
   "taskId": "<task_id>",
   "issueNumber": <N|null>,
@@ -103,14 +93,14 @@ DECISION
 
 2. **Also log a status event** with type `decision_requested`:
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"<task_id>","type":"decision_requested","phase":"<phase>","branch":"<branch>","pr_number":null,"status":"waiting","detail":"<question summary>"}' >> "$WS/logs/<task_id>.jsonl"
+echo '{"timestamp":"<ISO8601>","task_id":"<task_id>","type":"decision_requested","phase":"<phase>","branch":"<branch>","pr_number":null,"status":"waiting","detail":"<question summary>"}' >> ".squire/logs/<task_id>.jsonl"
 ```
 
 3. **Then wait for user input in the terminal as normal** (the user will see the Dashboard notification and switch to your terminal to respond).
 
 4. **After user responds**, delete the pending decision file:
 ```bash
-rm -f "$WS/logs/pending-decisions/<task_id>.json"
+rm -f ".squire/logs/pending-decisions/<task_id>.json"
 ```
 
 **Auto mode exception**: Never write decision requests — use defaults silently.
@@ -126,39 +116,34 @@ The user provides ONE of:
 
 **Before creating anything, check if there's already work in progress for this issue.**
 
-Each issue gets its own **git worktree** at `$WS/worktrees/issue-<N>/`, enabling parallel development across multiple issues.
+Each issue gets its own **git worktree** at `.worktrees/issue-<N>/`, enabling parallel development across multiple issues.
 
 ### Determine base repo path
 
-Extract the repo name from the issue URL (e.g., `my-project` from `https://github.com/org/my-project/issues/123`). The base repo is at `$WS/<repo-name>/`.
+Extract the repo name from the issue URL (e.g., `my-project` from `https://github.com/org/my-project/issues/123`). 
 
 ```bash
-REPO="$WS/<repo-name>"
+# Repo is current directory
 ```
 
-If the input is plain text (no URL), look for the first git repo directory under `$WS/`:
+If the input is plain text (no URL), use the current directory:
 ```bash
-REPO=$(find "$WS" -maxdepth 1 -type d -name ".git" -exec dirname {} \; | head -1)
-# Or if .git is inside a subdir:
-REPO=$(ls -d "$WS"/*/. 2>/dev/null | head -1)
 ```
 
 ### Step 1: Check for existing worktrees, branches, and PRs (run in parallel)
 ```bash
 # Check for existing worktrees matching this issue
-cd "$REPO"
+# already in repo
 git worktree list | grep "issue-<number>"
 ```
 ```bash
 # Check for existing branches matching this issue
-cd "$REPO"
+# already in repo
 git branch --all | grep -i "issue-<number>\|<number>"
 ```
 ```bash
-# Check for existing open PRs for this issue (use platform CLI)
+# Check for existing open PRs for this issue
 # GitHub: gh pr list --repo $REPO_SLUG --state open --json number,title,headRefName,body --jq '...'
-# GitLab: glab mr list --repo $REPO_SLUG --state opened
-# Azure DevOps: az repos pr list --repository $REPO_SLUG --status active
 gh pr list --repo $REPO_SLUG \
   --state open --json number,title,headRefName,body \
   --jq '[.[] | select(.body | test("#<number>"; "i")) // select(.headRefName | test("<number>"))]'
@@ -174,10 +159,10 @@ gh pr list --repo $REPO_SLUG \
 - Report: "Found existing PR #N on branch `<branch>` for this issue"
 - Create worktree from the existing remote branch and resume:
   ```bash
-  cd "$REPO"
+  # already in repo
   git fetch origin
-  git worktree add "$WS/worktrees/issue-<N>" origin/<branch>
-  cd "$WS/worktrees/issue-<N>"
+  git worktree add ".worktrees/issue-<N>" origin/<branch>
+  cd ".worktrees/issue-<N>"
   ```
 
 **If an existing branch is found (no worktree, no PR):**
@@ -188,20 +173,20 @@ gh pr list --repo $REPO_SLUG \
 
 ### If the input is a GitHub issue (URL or #number):
 ```bash
-cd "$REPO"
+# already in repo
 git fetch origin
-git worktree add -b fix/issue-<number> "$WS/worktrees/issue-<number>" origin/main
-cd "$WS/worktrees/issue-<number>"
+git worktree add -b fix/issue-<number> ".worktrees/issue-<number>" origin/main
+cd ".worktrees/issue-<number>"
 ```
 Branch name: `fix/issue-<number>` (bug fix) or `feat/issue-<number>` (feature)
 
 ### If the input is a plain text description (no issue number):
 ```bash
-cd "$REPO"
+# already in repo
 git fetch origin
 TASK_ID="adhoc-$(date +%Y%m%d-%H%M%S)"
-git worktree add -b fix/$TASK_ID "$WS/worktrees/$TASK_ID" origin/main
-cd "$WS/worktrees/$TASK_ID"
+git worktree add -b fix/$TASK_ID ".worktrees/$TASK_ID" origin/main
+cd ".worktrees/$TASK_ID"
 ```
 Branch name: `fix/adhoc-20260405-143022` or `feat/adhoc-20260405-143022`
 
@@ -211,10 +196,8 @@ Branch name: `fix/adhoc-20260405-143022` or `feat/adhoc-20260405-143022`
 
 ### If given an issue URL or reference:
 ```bash
-# Use platform-appropriate CLI:
+# Fetch issue details:
 # GitHub:   gh issue view <number> --repo $REPO_SLUG --json title,body,labels,comments,assignees,milestone
-# GitLab:   glab issue view <number> --repo $REPO_SLUG
-# Azure DevOps: az boards work-item show --id <number> --output json
 gh issue view <number> --repo $REPO_SLUG --json title,body,labels,comments,assignees,milestone
 ```
 
@@ -304,7 +287,7 @@ Plan is ready. How should we verify the changes?
 
 1. Build only (default) — run build command
 2. Build + Impacted Tests — build + only run unit tests related to changed files
-3. Build + Impacted Tests + Manual Verify — pick a scenario from pilot.yaml test_scenarios
+3. Build + Impacted Tests + Manual Verify — pick a scenario from .squire/config.yaml test_scenarios
 
 Pick 1/2/3 (default: 1):
 ```
@@ -329,18 +312,18 @@ After plan approval:
 
 ## Phase 5: Test & Fix
 
-Check if a `test_runner_skill` is configured in `pilot.yaml` and the corresponding skill file exists:
+Check if a `test_runner_skill` is configured in `.squire/config.yaml` and the corresponding skill file exists:
 - If it exists → launch the configured test runner skill with the chosen test strategy and relevant context (changed files, test strategy number)
 - If it does NOT exist → execute the strategies inline as described below
 
 ### Strategy 1 — Build Only (default):
-- If `build.command` is set in `pilot.yaml`, use it. Otherwise, analyze the project (e.g., `package.json`, `pom.xml`, `Makefile`, `Cargo.toml`) and determine the correct build command.
+- If `build.command` is set in `.squire/config.yaml`, use it. Otherwise, analyze the project (e.g., `package.json`, `pom.xml`, `Makefile`, `Cargo.toml`) and determine the correct build command.
 - If build fails: auto-fix up to 3 rounds
 - Build passes → proceed to Phase 6
 
 ### Strategy 2 — Build + Impacted Unit Tests:
 - Run build (same detection logic as strategy 1)
-- Determine and run impacted unit tests. If `build.test_command` is set in `pilot.yaml`, use it (replace `{{file}}` with the test file pattern). Otherwise, detect the test framework from the project and run only tests related to changed files.
+- Determine and run impacted unit tests. If `build.test_command` is set in `.squire/config.yaml`, use it (replace `{{file}}` with the test file pattern). Otherwise, detect the test framework from the project and run only tests related to changed files.
 - If either fails: auto-fix up to 3 rounds
 - All pass → proceed to Phase 6
 

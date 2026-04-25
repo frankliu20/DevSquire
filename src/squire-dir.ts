@@ -2,23 +2,23 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Manages the .devsquire/ directory in the workspace root.
+ * Manages the .squire/ directory in the workspace root.
  * All logs, task state, and runtime data go here.
  */
-export class DevSquireDir {
+export class SquireDir {
   readonly dir: string;
   readonly logsDir: string;
   readonly tasksDir: string;
   readonly decisionsDir: string;
 
   constructor(private workspaceRoot: string) {
-    this.dir = path.join(workspaceRoot, '.devsquire');
+    this.dir = path.join(workspaceRoot, '.squire');
     this.logsDir = path.join(this.dir, 'logs');
     this.tasksDir = path.join(this.dir, 'tasks');
     this.decisionsDir = path.join(this.dir, 'pending-decisions');
   }
 
-  /** Ensure .devsquire/ and subdirectories exist */
+  /** Ensure .squire/ and subdirectories exist */
   ensureDir(): void {
     for (const dir of [this.dir, this.logsDir, this.tasksDir, this.decisionsDir]) {
       if (!fs.existsSync(dir)) {
@@ -27,10 +27,10 @@ export class DevSquireDir {
     }
   }
 
-  /** Add .devsquire/ to .gitignore if not already there */
+  /** Add .squire/ to .gitignore if not already there */
   ensureGitignore(): void {
     const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
-    const entry = '.devsquire/';
+    const entry = '.squire/';
 
     try {
       let content = '';
