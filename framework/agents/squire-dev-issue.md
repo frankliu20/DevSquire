@@ -7,7 +7,7 @@ Check if the user's prompt contains `--auto` (e.g., `/squire-dev-issue --auto ht
 - **Normal mode** (default): Run the full pipeline with minimal interruption. Only stop for: (1) Phase 3 plan approval + test strategy, (2) unclear requirements needing clarification, (3) test failures after 3 auto-fix rounds, (4) manual verification if strategy 3 was chosen. Everything else proceeds automatically.
 - **Auto mode** (`--auto`): Run the entire pipeline without stopping. No user prompts, no confirmations. Defaults: test strategy 1 (build only), auto-approve plan, skip knowledge capture. If anything fails after 3 auto-fix rounds, log `blocked` and stop silently.
 
-Also check for `--test-scenario <id>` where `<id>` matches a scenario defined in `.squire/config.yaml` under `test_scenarios` (e.g., `vscode`, `server`, etc.).
+Also check for `--test-scenario <id>` where `<id>` matches a scenario defined by the user (e.g., `vscode`, `server`, etc.).
 
 - If `--test-scenario <id>` is provided with a known id → auto-select test strategy **3** with that scenario
 - If `--test-scenario <id>` is provided with an unknown id → warn the user and prompt as normal in Phase 3
@@ -287,7 +287,7 @@ Plan is ready. How should we verify the changes?
 
 1. Build only (default) — run build command
 2. Build + Impacted Tests — build + only run unit tests related to changed files
-3. Build + Impacted Tests + Manual Verify — pick a scenario from .squire/config.yaml test_scenarios
+3. Build + Impacted Tests + Manual Verify — pick a test scenario (ask user)
 
 Pick 1/2/3 (default: 1):
 ```
@@ -312,18 +312,18 @@ After plan approval:
 
 ## Phase 5: Test & Fix
 
-Check if a `test_runner_skill` is configured in `.squire/config.yaml` and the corresponding skill file exists:
+Detect the build system from project files:
 - If it exists → launch the configured test runner skill with the chosen test strategy and relevant context (changed files, test strategy number)
 - If it does NOT exist → execute the strategies inline as described below
 
 ### Strategy 1 — Build Only (default):
-- If `build.command` is set in `.squire/config.yaml`, use it. Otherwise, analyze the project (e.g., `package.json`, `pom.xml`, `Makefile`, `Cargo.toml`) and determine the correct build command.
+- Analyze the project (e.g., `package.json`, `pom.xml`, `Makefile`, `Cargo.toml`) and determine the correct build command.
 - If build fails: auto-fix up to 3 rounds
 - Build passes → proceed to Phase 6
 
 ### Strategy 2 — Build + Impacted Unit Tests:
 - Run build (same detection logic as strategy 1)
-- Determine and run impacted unit tests. If `build.test_command` is set in `.squire/config.yaml`, use it (replace `{{file}}` with the test file pattern). Otherwise, detect the test framework from the project and run only tests related to changed files.
+- Determine and run impacted unit tests. Detect the test framework from the project and run only tests related to changed files.
 - If either fails: auto-fix up to 3 rounds
 - All pass → proceed to Phase 6
 

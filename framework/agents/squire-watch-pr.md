@@ -248,8 +248,8 @@ Event types: `review_comments`, `ready_to_merge`, `pr_merged`, `ci_failure`, `ci
 5. **Never auto-merge** — only notify
 6. **My PRs only** — ignore other people's PRs
 7. **Auto-fix delegates to `/squire-dev-issue --auto`** — reuses existing worktrees, full fix pipeline
-8. **Auto-fix CI is on by default** — disable via `watch_pr.auto_fix_ci: false` in `.squire/config.yaml`
-9. **Auto-fix comments is off by default** — enable via `watch_pr.auto_fix_comments: true` in `.squire/config.yaml`
+8. **Auto-fix CI is on by default** — configure via VS Code setting `devSquire.watchPR.autoFixCI`
+9. **Auto-fix comments is off by default** — configure via VS Code setting `devSquire.watchPR.autoFixComments`
 10. **Max 3 auto-fix attempts** per PR per fix type — then stop and notify user
 11. **Never force push** — all fixes are new commits
 12. **Log all auto-fix actions** — every fix attempt is logged

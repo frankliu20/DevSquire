@@ -5,7 +5,6 @@ import { TaskRunner } from './task-runner';
 import { FrameworkSync } from './framework-sync';
 import { GitHubDetector } from './github-detector';
 import { SquireDir } from './squire-dir';
-import { SquireConfigManager } from './squire-config';
 import { GitHubData } from './github-data';
 import { TaskStateReader } from './task-state';
 import { SkillsReader } from './skills-reader';
@@ -25,10 +24,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const squireDir = new SquireDir(workspaceRoot);
   squireDir.ensureDir();
   squireDir.ensureGitignore();
-
-  // Initialize project config (.squire/config.yaml)
-  const squireConfig = new SquireConfigManager(squireDir.dir, workspaceRoot);
-  squireConfig.ensureConfig();
 
   // Sync framework
   const frameworkSync = new FrameworkSync(context);
