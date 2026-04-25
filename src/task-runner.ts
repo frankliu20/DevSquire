@@ -210,8 +210,12 @@ export class TaskRunner {
   }
 
   /**
-   * Launch a VS Code terminal with the copilot CLI command.
-   * Command format matches dashboard: copilot -i "<prompt>" --allow-all
+   * Launch a VS Code terminal with the copilot CLI.
+   *
+   * For slash commands (starting with /): start copilot interactive mode
+   * with --allow-all, then send the slash command as input.
+   *
+   * For plain prompts: use copilot -i "<prompt>" --allow-all directly.
    */
   private launchTerminal(taskInfo: TaskInfo, prompt: string, cwd: string, terminalTitle: string, icon: string): void {
     this.tasks.set(taskInfo.id, taskInfo);
@@ -230,9 +234,20 @@ export class TaskRunner {
 
     terminal.show(false);
 
-    // Match dashboard command format: copilot -i "<prompt>" --allow-all
     const sanitizedPrompt = prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
-    terminal.sendText(`copilot -i "${sanitizedPrompt}" --allow-all`, true);
+
+    if (prompt.startsWith('/')) {
+      // Slash commands only work inside interactive REPL.
+      // Start copilot in interactive mode, then send the command.
+      terminal.sendText('copilot --allow-all', true);
+      // Small delay to let copilot start, then send the slash command
+      setTimeout(() => {
+        terminal.sendText(prompt, true);
+      }, 1500);
+    } else {
+      // Plain prompts can use -i flag directly
+      terminal.sendText(`copilot -i "${sanitizedPrompt}" --allow-all`, true);
+    }
 
     taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
