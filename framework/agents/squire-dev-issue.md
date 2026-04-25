@@ -312,18 +312,25 @@ After plan approval:
 
 ## Phase 5: Test & Fix
 
-Detect the build system from project files:
-- If it exists → launch the configured test runner skill with the chosen test strategy and relevant context (changed files, test strategy number)
-- If it does NOT exist → execute the strategies inline as described below
+### Project Config (optional)
+
+Check if `.squire/config.yaml` exists. If it does, read it for user-specified overrides:
+```yaml
+# .squire/config.yaml (optional — all fields optional)
+build_command: "npm run build"    # override auto-detected build command
+test_command: "npm test"          # override auto-detected test command
+```
+
+If the file does not exist or a field is missing, auto-detect from project files (`package.json`, `pom.xml`, `Makefile`, `Cargo.toml`, `go.mod`, etc.).
 
 ### Strategy 1 — Build Only (default):
-- Analyze the project (e.g., `package.json`, `pom.xml`, `Makefile`, `Cargo.toml`) and determine the correct build command.
+- Use `build_command` from config, or auto-detect from project files.
 - If build fails: auto-fix up to 3 rounds
 - Build passes → proceed to Phase 6
 
 ### Strategy 2 — Build + Impacted Unit Tests:
-- Run build (same detection logic as strategy 1)
-- Determine and run impacted unit tests. Detect the test framework from the project and run only tests related to changed files.
+- Run build (same logic as strategy 1)
+- Use `test_command` from config, or detect the test framework and run only tests related to changed files.
 - If either fails: auto-fix up to 3 rounds
 - All pass → proceed to Phase 6
 

@@ -206,7 +206,7 @@ When the user asks to fix a comment:
    fi
    ```
 2. Make the fix
-3. Verify: detect and run the project build command (e.g. `npm run build`, `mvn compile`, etc.)
+3. Verify: use `build_command` from `.squire/config.yaml` if present, otherwise auto-detect the build command (e.g. `npm run build`, `mvn compile`, etc.)
 4. Commit and push:
    ```bash
    git add <files>
