@@ -160,11 +160,11 @@ Maintain a counter per PR per fix type. Persist in `$WS/logs/auto-fix-state.json
 
 Only trigger when CI **newly failed** (not already failing from last cycle with same error).
 
-1. **Invoke `/pilot-dev-issue --auto`**:
+1. **Invoke `/squire-dev-issue --auto`**:
 ```
-/pilot-dev-issue --auto Fix failing CI on PR #<N> (repo: $REPO_SLUG, branch: <branch>). Diagnose the CI failure and push a fix.
+/squire-dev-issue --auto Fix failing CI on PR #<N> (repo: $REPO_SLUG, branch: <branch>). Diagnose the CI failure and push a fix.
 ```
-`pilot-dev-issue` will handle everything: fetch CI logs, analyze the failure, fix the code, build-verify, commit, and push.
+`squire-dev-issue` will handle everything: fetch CI logs, analyze the failure, fix the code, build-verify, commit, and push.
 
 2. **After completion**:
    - Increment `ci_attempts` for this PR
@@ -181,9 +181,9 @@ Only trigger when CI **newly failed** (not already failing from last cycle with 
 
 Only trigger when **new** unresolved comments appear (count increased since last cycle).
 
-1. **Invoke `/pilot-dev-issue --auto`**:
+1. **Invoke `/squire-dev-issue --auto`**:
 ```
-/pilot-dev-issue --auto Address unresolved review comments on PR #<N> (repo: $REPO_SLUG, branch: <branch>). Read the comments, fix the code, and push.
+/squire-dev-issue --auto Address unresolved review comments on PR #<N> (repo: $REPO_SLUG, branch: <branch>). Read the comments, fix the code, and push.
 ```
 
 2. **After completion**: increment `comment_attempts`, log event, update notification.
@@ -281,7 +281,7 @@ Event types: `review_comments`, `ready_to_merge`, `pr_merged`, `ci_failure`, `ci
 4. **Only elaborate on changes** — don't repeat known status
 5. **Never auto-merge** — only notify
 6. **My PRs only** — ignore other people's PRs
-7. **Auto-fix delegates to `/pilot-dev-issue --auto`** — reuses existing worktrees, full fix pipeline
+7. **Auto-fix delegates to `/squire-dev-issue --auto`** — reuses existing worktrees, full fix pipeline
 8. **Auto-fix CI is on by default** — disable via `watch_pr.auto_fix_ci: false` in `pilot.yaml`
 9. **Auto-fix comments is off by default** — enable via `watch_pr.auto_fix_comments: true` in `pilot.yaml`
 10. **Max 3 auto-fix attempts** per PR per fix type — then stop and notify user

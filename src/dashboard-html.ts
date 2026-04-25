@@ -10,7 +10,7 @@ export function getDashboardHtml(repoInfo: GitHubRepoInfo): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dev Pilot</title>
+<title>DevSquire</title>
 <style>
 /* ===== Design Tokens (ported from dashboard tokens.css) ===== */
 :root {
@@ -344,7 +344,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 <!-- Header -->
 <div class="header">
   <div class="header-left">
-    <h2>Dev Pilot</h2>
+    <h2>DevSquire</h2>
     <code>${owner}/${repo}</code>
   </div>
   <select id="accountSelect" class="account-select" onchange="switchAccount(this.value)" style="display:none"></select>

@@ -1,5 +1,5 @@
 ---
-name: pilot-code-explorer
+name: squire-code-explorer
 description: Explores and analyzes codebases to understand architecture, locate relevant files, and map dependencies. Use this agent when you need to understand code structure before making changes.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit

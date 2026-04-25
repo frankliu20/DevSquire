@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { TaskRunner } from './task-runner';
 import { GitHubRepoInfo } from './github-detector';
-import { DevPilotDir } from './dev-pilot-dir';
+import { DevSquireDir } from './devsquire-dir';
 import { GitHubData } from './github-data';
 import { TaskStateReader } from './task-state';
 import { SkillsReader } from './skills-reader';
@@ -15,7 +15,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly taskRunner: TaskRunner,
     private readonly repoInfo: GitHubRepoInfo,
-    private readonly devPilotDir: DevPilotDir,
+    private readonly devSquireDir: DevSquireDir,
     private readonly ghData: GitHubData,
     private readonly taskStateReader: TaskStateReader,
     private readonly skillsReader: SkillsReader,

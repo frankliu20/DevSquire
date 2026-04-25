@@ -1,5 +1,5 @@
 ---
-name: pilot-pr-creator
+name: squire-pr-creator
 description: Handles all git and platform operations - creates branches, commits, pushes, and opens pull requests/merge requests. Use this agent when code is ready to be submitted.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit

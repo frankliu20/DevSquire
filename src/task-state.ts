@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** Task phases matching the dev-pilot pipeline */
+/** Task phases matching the devsquire pipeline */
 export type TaskPhase =
   | 'planned' | 'analyzing' | 'exploring' | 'planning'
   | 'implementing' | 'testing' | 'test_failed'
@@ -47,11 +47,11 @@ export interface PendingDecision {
  * Reads task state from JSONL log files and pending decisions.
  */
 export class TaskStateReader {
-  constructor(private devPilotDir: string) {}
+  constructor(private devSquireDir: string) {}
 
   /** Read all task states from log files */
   readAllTasks(): TaskState[] {
-    const logsDir = path.join(this.devPilotDir, 'logs');
+    const logsDir = path.join(this.devSquireDir, 'logs');
     if (!fs.existsSync(logsDir)) return [];
 
     const tasks: TaskState[] = [];
@@ -68,7 +68,7 @@ export class TaskStateReader {
 
   /** Read a single task state */
   readTask(taskId: string): TaskState | null {
-    const logFile = path.join(this.devPilotDir, 'logs', `${taskId}.jsonl`);
+    const logFile = path.join(this.devSquireDir, 'logs', `${taskId}.jsonl`);
     if (!fs.existsSync(logFile)) return null;
 
     try {
@@ -130,7 +130,7 @@ export class TaskStateReader {
 
   /** Read pending decisions */
   readDecisions(): PendingDecision[] {
-    const decisionsDir = path.join(this.devPilotDir, 'pending-decisions');
+    const decisionsDir = path.join(this.devSquireDir, 'pending-decisions');
     if (!fs.existsSync(decisionsDir)) return [];
 
     try {
@@ -154,7 +154,7 @@ export class TaskStateReader {
 
   /** Dismiss a decision */
   dismissDecision(decisionId: string): boolean {
-    const decisionsDir = path.join(this.devPilotDir, 'pending-decisions');
+    const decisionsDir = path.join(this.devSquireDir, 'pending-decisions');
     const filePath = path.join(decisionsDir, `${decisionId}.json`);
     try {
       if (fs.existsSync(filePath)) {
@@ -169,7 +169,7 @@ export class TaskStateReader {
 
   /** Delete a task's log file */
   deleteTaskLog(taskId: string): boolean {
-    const logFile = path.join(this.devPilotDir, 'logs', `${taskId}.jsonl`);
+    const logFile = path.join(this.devSquireDir, 'logs', `${taskId}.jsonl`);
     try {
       if (fs.existsSync(logFile)) {
         fs.unlinkSync(logFile);
@@ -183,8 +183,8 @@ export class TaskStateReader {
 
   /** Global cleanup: delete all logs, decisions */
   cleanupAll(): void {
-    const logsDir = path.join(this.devPilotDir, 'logs');
-    const decisionsDir = path.join(this.devPilotDir, 'pending-decisions');
+    const logsDir = path.join(this.devSquireDir, 'logs');
+    const decisionsDir = path.join(this.devSquireDir, 'pending-decisions');
 
     for (const dir of [logsDir, decisionsDir]) {
       if (fs.existsSync(dir)) {

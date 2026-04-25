@@ -18,7 +18,7 @@ export interface SkillInfo {
 export class SkillsReader {
   /** Read all installed skills from the configured location */
   readAll(): SkillInfo[] {
-    const location = vscode.workspace.getConfiguration('devPilot').get<string>('frameworkLocation', 'home');
+    const location = vscode.workspace.getConfiguration('devSquire').get<string>('frameworkLocation', 'home');
     const results: SkillInfo[] = [];
 
     if (location === 'project') {

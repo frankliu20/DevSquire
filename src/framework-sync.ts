@@ -4,12 +4,12 @@ import * as path from 'path';
 import * as os from 'os';
 
 /**
- * Syncs Dev Pilot commands and agents to the configured location.
+ * Syncs DevSquire commands and agents to the configured location.
  * Bundled markdown files are in the extension's `framework/` directory.
  *
  * Locations:
- *   - "home": ~/.copilot/commands/ and ~/.copilot/agents/  (default)
- *   - "project": <workspace>/.github/copilot/commands/ and .github/copilot/agents/
+ *   - "home": ~/.copilot/agents/  (default)
+ *   - "project": <workspace>/.github/copilot/agents/
  */
 export class FrameworkSync {
   private readonly bundledDir: string;
@@ -19,41 +19,34 @@ export class FrameworkSync {
   }
 
   async sync(showNotification = false): Promise<void> {
-    const location = vscode.workspace.getConfiguration('devPilot').get<string>('frameworkLocation', 'home');
+    const location = vscode.workspace.getConfiguration('devSquire').get<string>('frameworkLocation', 'home');
     const targetDirs = this.getTargetDirs(location);
 
     if (!targetDirs) {
       if (showNotification) {
-        vscode.window.showErrorMessage('Dev Pilot: Cannot determine target directory for framework sync.');
+        vscode.window.showErrorMessage('DevSquire: Cannot determine target directory for framework sync.');
       }
       return;
     }
 
     let synced = 0;
 
-    // Sync commands
-    synced += this.syncDir(
-      path.join(this.bundledDir, 'commands'),
-      targetDirs.commands,
-    );
-
-    // Sync agents
+    // Sync agents (Copilot CLI only recognizes agents, not commands)
     synced += this.syncDir(
       path.join(this.bundledDir, 'agents'),
       targetDirs.agents,
     );
 
     if (showNotification) {
-      vscode.window.showInformationMessage(`Dev Pilot: Synced ${synced} files to ${location === 'home' ? '~/.copilot/' : '.github/copilot/'}`);
+      vscode.window.showInformationMessage(`DevSquire: Synced ${synced} files to ${location === 'home' ? '~/.copilot/' : '.github/copilot/'}`);
     }
   }
 
-  private getTargetDirs(location: string): { commands: string; agents: string } | null {
+  private getTargetDirs(location: string): { agents: string } | null {
     if (location === 'project') {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) return null;
       return {
-        commands: path.join(workspaceRoot, '.github', 'copilot', 'commands'),
         agents: path.join(workspaceRoot, '.github', 'copilot', 'agents'),
       };
     }
@@ -61,7 +54,6 @@ export class FrameworkSync {
     // Default: home directory
     const copilotDir = path.join(os.homedir(), '.copilot');
     return {
-      commands: path.join(copilotDir, 'commands'),
       agents: path.join(copilotDir, 'agents'),
     };
   }

@@ -1,5 +1,5 @@
 ---
-name: pilot-pr-reviewer
+name: squire-pr-reviewer
 description: Reviews a single PR — fetches diff, comments, and CI status, then presents a structured code review for interactive discussion. Use this agent when the user wants to review a specific PR.
 tools: Read, Grep, Glob, Bash
 model: sonnet

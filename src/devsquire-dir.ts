@@ -2,23 +2,23 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Manages the .dev-pilot/ directory in the workspace root.
+ * Manages the .devsquire/ directory in the workspace root.
  * All logs, task state, and runtime data go here.
  */
-export class DevPilotDir {
+export class DevSquireDir {
   readonly dir: string;
   readonly logsDir: string;
   readonly tasksDir: string;
   readonly decisionsDir: string;
 
   constructor(private workspaceRoot: string) {
-    this.dir = path.join(workspaceRoot, '.dev-pilot');
+    this.dir = path.join(workspaceRoot, '.devsquire');
     this.logsDir = path.join(this.dir, 'logs');
     this.tasksDir = path.join(this.dir, 'tasks');
     this.decisionsDir = path.join(this.dir, 'pending-decisions');
   }
 
-  /** Ensure .dev-pilot/ and subdirectories exist */
+  /** Ensure .devsquire/ and subdirectories exist */
   ensureDir(): void {
     for (const dir of [this.dir, this.logsDir, this.tasksDir, this.decisionsDir]) {
       if (!fs.existsSync(dir)) {
@@ -27,10 +27,10 @@ export class DevPilotDir {
     }
   }
 
-  /** Add .dev-pilot/ to .gitignore if not already there */
+  /** Add .devsquire/ to .gitignore if not already there */
   ensureGitignore(): void {
     const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
-    const entry = '.dev-pilot/';
+    const entry = '.devsquire/';
 
     try {
       let content = '';
@@ -38,7 +38,7 @@ export class DevPilotDir {
         content = fs.readFileSync(gitignorePath, 'utf-8');
       }
       if (!content.includes(entry)) {
-        const section = `\n# Dev Pilot workspace data\n${entry}\n`;
+        const section = `\n# DevSquire workspace data\n${entry}\n`;
         fs.appendFileSync(gitignorePath, section);
       }
     } catch {

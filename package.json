@@ -1,9 +1,9 @@
 {
-  "name": "dev-pilot-vscode",
-  "displayName": "Dev Pilot",
+  "name": "devsquire-vscode",
+  "displayName": "DevSquire",
   "description": "AI engineering team dashboard — orchestrate GitHub Copilot CLI workflows with worktree isolation from VS Code",
   "version": "0.1.0",
-  "publisher": "dev-pilot",
+  "publisher": "devsquire",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
@@ -18,57 +18,57 @@
   "contributes": {
     "commands": [
       {
-        "command": "devPilot.openDashboard",
-        "title": "Dev Pilot: Open Dashboard"
+        "command": "devSquire.openDashboard",
+        "title": "DevSquire: Open Dashboard"
       },
       {
-        "command": "devPilot.devIssue",
-        "title": "Dev Pilot: Develop Issue"
+        "command": "devSquire.devIssue",
+        "title": "DevSquire: Develop Issue"
       },
       {
-        "command": "devPilot.watchPRs",
-        "title": "Dev Pilot: Watch PRs"
+        "command": "devSquire.watchPRs",
+        "title": "DevSquire: Watch PRs"
       },
       {
-        "command": "devPilot.syncFramework",
-        "title": "Dev Pilot: Sync Commands & Agents"
+        "command": "devSquire.syncFramework",
+        "title": "DevSquire: Sync Agents"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "devPilot",
-          "title": "Dev Pilot",
+          "id": "devSquire",
+          "title": "DevSquire",
           "icon": "resources/icon.svg"
         }
       ]
     },
     "views": {
-      "devPilot": [
+      "devSquire": [
         {
           "type": "webview",
-          "id": "devPilot.dashboard",
+          "id": "devSquire.dashboard",
           "name": "Dashboard"
         }
       ]
     },
     "configuration": {
-      "title": "Dev Pilot",
+      "title": "DevSquire",
       "properties": {
-        "devPilot.frameworkLocation": {
+        "devSquire.frameworkLocation": {
           "type": "string",
           "default": "home",
           "enum": ["home", "project"],
           "enumDescriptions": [
-            "Install commands/agents to ~/.copilot/ (shared across projects)",
-            "Install commands/agents to .github/copilot/ (per-project, committed to repo)"
+            "Install agents to ~/.copilot/ (shared across projects)",
+            "Install agents to .github/copilot/ (per-project, committed to repo)"
           ],
-          "description": "Where to install Dev Pilot commands and agents"
+          "description": "Where to install DevSquire agents"
         },
-        "devPilot.autoSyncFramework": {
+        "devSquire.autoSyncFramework": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically sync commands/agents on activation"
+          "description": "Automatically sync agents on activation"
         }
       }
     }

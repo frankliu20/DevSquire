@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
-import { DevPilotDir } from './dev-pilot-dir';
+import { DevSquireDir } from './devsquire-dir';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command';
 
@@ -23,6 +23,16 @@ export interface ReviewConfig {
   level: 'critical' | 'important' | 'everything';
 }
 
+/** Describes how to launch a copilot CLI session */
+interface AgentLaunch {
+  /** Agent name — launches `copilot --agent <name> --allow-all` */
+  agent?: string;
+  /** Plain prompt — launches `copilot -i "<prompt>" --allow-all` */
+  prompt?: string;
+  /** Sent as first message after agent REPL starts */
+  initialPrompt?: string;
+}
+
 export class TaskRunner {
   private tasks: Map<string, TaskInfo> = new Map();
   private _onTasksChanged = new vscode.EventEmitter<void>();
@@ -32,7 +42,7 @@ export class TaskRunner {
     private worktree: WorktreeManager,
     private workspaceRoot: string,
     private repoInfo: GitHubRepoInfo,
-    private devPilotDir: DevPilotDir,
+    private devSquireDir: DevSquireDir,
   ) {
     vscode.window.onDidCloseTerminal((closedTerminal) => {
       for (const task of this.tasks.values()) {
@@ -40,7 +50,7 @@ export class TaskRunner {
           task.status = 'completed';
           task.terminal = undefined;
           this._onTasksChanged.fire();
-          this.devPilotDir.log('tasks', `Task ${task.id} (${task.label}) terminal closed`);
+          this.devSquireDir.log('tasks', `Task ${task.id} (${task.label}) terminal closed`);
         }
       }
     });
@@ -54,7 +64,7 @@ export class TaskRunner {
     return `https://github.com/${this.repoSlug}`;
   }
 
-  /** Run /pilot-dev-issue — matches dashboard assign command */
+  /** Run /squire-dev-issue — matches dashboard assign command */
   async runDevIssue(issueInput: string, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
     const issueNum = this.extractIssueNumber(issueInput);
     const issueUrl = issueNum
@@ -70,8 +80,11 @@ export class TaskRunner {
       ? `Copilot: #${issueNum}`
       : `Copilot: dev-issue-adhoc-${Date.now()}`;
 
-    const autoFlag = mode === 'auto' ? ' --auto' : '';
-    const prompt = `/pilot-dev-issue${autoFlag} ${issueUrl}`;
+    const autoFlag = mode === 'auto' ? '--auto ' : '';
+    const agentArgs: AgentLaunch = {
+      agent: 'squire-dev-issue',
+      initialPrompt: `${autoFlag}${issueUrl}`,
+    };
 
     const taskInfo: TaskInfo = {
       id: `dev-${Date.now()}`,
@@ -85,11 +98,11 @@ export class TaskRunner {
     };
 
     const cwd = wt?.path || this.workspaceRoot;
-    this.launchTerminal(taskInfo, prompt, cwd, terminalTitle, 'rocket');
+    this.launchTerminal(taskInfo, agentArgs, cwd, terminalTitle, 'rocket');
     return taskInfo;
   }
 
-  /** Run /pilot-watch-pr */
+  /** Run squire-watch-pr agent */
   async runWatchPRs(): Promise<TaskInfo> {
     const taskInfo: TaskInfo = {
       id: `watch-${Date.now()}`,
@@ -99,11 +112,11 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, '/pilot-watch-pr', this.workspaceRoot, 'Copilot: Watch PRs', 'eye');
+    this.launchTerminal(taskInfo, { agent: 'squire-watch-pr' }, this.workspaceRoot, 'Copilot: Watch PRs', 'eye');
     return taskInfo;
   }
 
-  /** Review a PR — matches dashboard review-pr command */
+  /** Review a PR via squire-pr-reviewer agent */
   async runReviewPR(prNumber: number, config: ReviewConfig): Promise<TaskInfo> {
     const prUrl = `${this.repoUrl}/pull/${prNumber}`;
 
@@ -113,7 +126,10 @@ export class TaskRunner {
 
     const terminalTitle = `Copilot: Review PR #${prNumber}${strategySuffix}`;
 
-    const prompt = `Use the pilot-pr-reviewer agent to review this PR: ${prUrl} --strategy ${config.strategy} --level ${config.level}`;
+    const agentArgs: AgentLaunch = {
+      agent: 'squire-pr-reviewer',
+      initialPrompt: `Review this PR: ${prUrl} --strategy ${config.strategy} --level ${config.level}`,
+    };
 
     const taskInfo: TaskInfo = {
       id: `review-${Date.now()}`,
@@ -124,14 +140,17 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, terminalTitle, 'code-review');
+    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'code-review');
     return taskInfo;
   }
 
-  /** Fix PR comments — matches dashboard fix-comments command */
+  /** Fix PR comments via squire-dev-issue agent */
   async runFixComments(prNumber: number, mode: 'normal' | 'auto' = 'auto'): Promise<TaskInfo> {
-    const autoFlag = mode === 'auto' ? ' --auto' : '';
-    const prompt = `/pilot-dev-issue${autoFlag} check open comments on ${this.repoUrl}/pull/${prNumber} and fix them`;
+    const autoFlag = mode === 'auto' ? '--auto ' : '';
+    const agentArgs: AgentLaunch = {
+      agent: 'squire-dev-issue',
+      initialPrompt: `${autoFlag}check open comments on ${this.repoUrl}/pull/${prNumber} and fix them`,
+    };
     const terminalTitle = `Copilot: Fix PR #${prNumber} comments`;
 
     const taskInfo: TaskInfo = {
@@ -143,7 +162,7 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, prompt, this.workspaceRoot, terminalTitle, 'wrench');
+    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'wrench');
     return taskInfo;
   }
 
@@ -162,7 +181,7 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, command, this.workspaceRoot, terminalTitle, 'terminal');
+    this.launchTerminal(taskInfo, { prompt: command }, this.workspaceRoot, terminalTitle, 'terminal');
     return taskInfo;
   }
 
@@ -177,7 +196,7 @@ export class TaskRunner {
       task.status = 'failed';
       task.terminal = undefined;
       this._onTasksChanged.fire();
-      this.devPilotDir.log('tasks', `Task ${taskId} killed by user`);
+      this.devSquireDir.log('tasks', `Task ${taskId} killed by user`);
     }
   }
 
@@ -191,7 +210,7 @@ export class TaskRunner {
     }
     this.tasks.delete(taskId);
     this._onTasksChanged.fire();
-    this.devPilotDir.log('tasks', `Task ${taskId} cleaned up`);
+    this.devSquireDir.log('tasks', `Task ${taskId} cleaned up`);
   }
 
   openWorktree(taskId: string): void {
@@ -212,14 +231,12 @@ export class TaskRunner {
   /**
    * Launch a VS Code terminal with the copilot CLI.
    *
-   * For slash commands (starting with /): start copilot interactive mode
-   * with --allow-all, then send the slash command as input.
-   *
-   * For plain prompts: use copilot -i "<prompt>" --allow-all directly.
+   * Agent mode: `copilot --agent <name> --allow-all`, then send initialPrompt.
+   * Prompt mode: `copilot -i "<prompt>" --allow-all`.
    */
-  private launchTerminal(taskInfo: TaskInfo, prompt: string, cwd: string, terminalTitle: string, icon: string): void {
+  private launchTerminal(taskInfo: TaskInfo, launch: AgentLaunch, cwd: string, terminalTitle: string, icon: string): void {
     this.tasks.set(taskInfo.id, taskInfo);
-    this.devPilotDir.logJson('tasks', {
+    this.devSquireDir.logJson('tasks', {
       event: 'task_created',
       taskId: taskInfo.id,
       type: taskInfo.type,
@@ -234,19 +251,19 @@ export class TaskRunner {
 
     terminal.show(false);
 
-    const sanitizedPrompt = prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
-
-    if (prompt.startsWith('/')) {
-      // Slash commands only work inside interactive REPL.
-      // Start copilot in interactive mode, then send the command.
-      terminal.sendText('copilot --allow-all', true);
-      // Small delay to let copilot start, then send the slash command
-      setTimeout(() => {
-        terminal.sendText(prompt, true);
-      }, 1500);
-    } else {
-      // Plain prompts can use -i flag directly
-      terminal.sendText(`copilot -i "${sanitizedPrompt}" --allow-all`, true);
+    if (launch.agent) {
+      // Start copilot with the specified agent
+      terminal.sendText(`copilot --agent ${launch.agent} --allow-all`, true);
+      if (launch.initialPrompt) {
+        // Send initial prompt after REPL starts
+        setTimeout(() => {
+          terminal.sendText(launch.initialPrompt!, true);
+        }, 2000);
+      }
+    } else if (launch.prompt) {
+      // Plain prompt — use -i flag directly
+      const sanitized = launch.prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
+      terminal.sendText(`copilot -i "${sanitized}" --allow-all`, true);
     }
 
     taskInfo.terminal = terminal;

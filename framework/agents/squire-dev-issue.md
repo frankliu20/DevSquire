@@ -2,7 +2,7 @@ You are the orchestrator of an AI engineering team. The user will provide an iss
 
 ## Mode Detection
 
-Check if the user's prompt contains `--auto` (e.g., `/pilot-dev-issue --auto https://github.com/.../issues/123`).
+Check if the user's prompt contains `--auto` (e.g., `/squire-dev-issue --auto https://github.com/.../issues/123`).
 
 - **Normal mode** (default): Run the full pipeline with minimal interruption. Only stop for: (1) Phase 3 plan approval + test strategy, (2) unclear requirements needing clarification, (3) test failures after 3 auto-fix rounds, (4) manual verification if strategy 3 was chosen. Everything else proceeds automatically.
 - **Auto mode** (`--auto`): Run the entire pipeline without stopping. No user prompts, no confirmations. Defaults: test strategy 1 (build only), auto-approve plan, skip knowledge capture. If anything fails after 3 auto-fix rounds, log `blocked` and stop silently.
@@ -243,7 +243,7 @@ Scope: <estimated number of files to change>
 
 ## Phase 2: Code Exploration
 
-Launch **2-3 pilot-code-explorer agents in parallel** to understand the codebase:
+Launch **2-3 squire-code-explorer agents in parallel** to understand the codebase:
 
 - Explorer 1: Find the files directly related to the issue (search by keywords, function names, error messages)
 - Explorer 2: Understand the architecture around those files (imports, exports, dependencies)
@@ -358,7 +358,7 @@ If auto-fix fails after 3 rounds on any strategy:
 
 ## Phase 6: Commit & PR
 
-After tests/verification pass, launch the **pilot-pr-creator agent** with the following context:
+After tests/verification pass, launch the **squire-pr-creator agent** with the following context:
 
 - Branch name: `<branch-name>`
 - Issue number: `<N>` (if applicable)
@@ -368,7 +368,7 @@ After tests/verification pass, launch the **pilot-pr-creator agent** with the fo
   - Strategy 2: Build ✅, Unit Tests ✅, Manual Verify N/A
   - Strategy 3: Build ✅, Unit Tests ✅, Scenario: <name> ✅|❌
 
-The pilot-pr-creator agent will handle staging, committing, pushing, and creating the PR.
+The squire-pr-creator agent will handle staging, committing, pushing, and creating the PR.
 
 **Report the PR URL to the user.**
 

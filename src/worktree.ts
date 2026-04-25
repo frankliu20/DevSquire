@@ -102,7 +102,7 @@ export class WorktreeManager {
         content = fs.readFileSync(gitignorePath, 'utf-8');
       }
       if (!content.includes(entry)) {
-        fs.appendFileSync(gitignorePath, `\n# Dev Pilot worktrees\n${entry}\n`);
+        fs.appendFileSync(gitignorePath, `\n# DevSquire worktrees\n${entry}\n`);
       }
     } catch {
       // Ignore

@@ -4,7 +4,7 @@ import { WorktreeManager } from './worktree';
 import { TaskRunner } from './task-runner';
 import { FrameworkSync } from './framework-sync';
 import { GitHubDetector } from './github-detector';
-import { DevPilotDir } from './dev-pilot-dir';
+import { DevSquireDir } from './devsquire-dir';
 import { GitHubData } from './github-data';
 import { TaskStateReader } from './task-state';
 import { SkillsReader } from './skills-reader';
@@ -20,30 +20,30 @@ export async function activate(context: vscode.ExtensionContext) {
   const repoInfo = detector.detect(workspaceRoot);
   if (!repoInfo) return; // Not a GitHub repo
 
-  // Initialize .dev-pilot/
-  const devPilotDir = new DevPilotDir(workspaceRoot);
-  devPilotDir.ensureDir();
-  devPilotDir.ensureGitignore();
+  // Initialize .devsquire/
+  const devSquireDir = new DevSquireDir(workspaceRoot);
+  devSquireDir.ensureDir();
+  devSquireDir.ensureGitignore();
 
   // Sync framework
   const frameworkSync = new FrameworkSync(context);
-  if (vscode.workspace.getConfiguration('devPilot').get('autoSyncFramework', true)) {
+  if (vscode.workspace.getConfiguration('devSquire').get('autoSyncFramework', true)) {
     await frameworkSync.sync();
   }
 
   // Core services
   const ghData = new GitHubData(repoInfo.owner, repoInfo.repo);
   const worktree = new WorktreeManager();
-  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, devPilotDir);
-  const taskStateReader = new TaskStateReader(devPilotDir.dir);
+  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, devSquireDir);
+  const taskStateReader = new TaskStateReader(devSquireDir.dir);
   const skillsReader = new SkillsReader();
-  const reportGenerator = new ReportGenerator(ghData, devPilotDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
+  const reportGenerator = new ReportGenerator(ghData, devSquireDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
 
   dashboardProvider = new DashboardViewProvider(
     context.extensionUri,
     taskRunner,
     repoInfo,
-    devPilotDir,
+    devSquireDir,
     ghData,
     taskStateReader,
     skillsReader,
@@ -51,13 +51,13 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('devPilot.dashboard', dashboardProvider),
+    vscode.window.registerWebviewViewProvider('devSquire.dashboard', dashboardProvider),
 
-    vscode.commands.registerCommand('devPilot.openDashboard', () => {
-      vscode.commands.executeCommand('devPilot.dashboard.focus');
+    vscode.commands.registerCommand('devSquire.openDashboard', () => {
+      vscode.commands.executeCommand('devSquire.dashboard.focus');
     }),
 
-    vscode.commands.registerCommand('devPilot.devIssue', async () => {
+    vscode.commands.registerCommand('devSquire.devIssue', async () => {
       const issueUrl = await vscode.window.showInputBox({
         prompt: 'Enter GitHub issue URL or #number',
         placeHolder: `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/123`,
@@ -65,16 +65,16 @@ export async function activate(context: vscode.ExtensionContext) {
       if (issueUrl) taskRunner.runDevIssue(issueUrl);
     }),
 
-    vscode.commands.registerCommand('devPilot.watchPRs', () => {
+    vscode.commands.registerCommand('devSquire.watchPRs', () => {
       taskRunner.runWatchPRs();
     }),
 
-    vscode.commands.registerCommand('devPilot.syncFramework', () => {
+    vscode.commands.registerCommand('devSquire.syncFramework', () => {
       frameworkSync.sync(true);
     }),
   );
 
-  devPilotDir.log('extension', `Activated for ${repoInfo.owner}/${repoInfo.repo}`);
+  devSquireDir.log('extension', `Activated for ${repoInfo.owner}/${repoInfo.repo}`);
 }
 
 export function deactivate() {}

@@ -28,12 +28,12 @@ export class ReportGenerator {
 
   constructor(
     private ghData: GitHubData,
-    private devPilotDir: string,
+    private devSquireDir: string,
     private workspaceRoot: string,
     owner: string,
     repo: string,
   ) {
-    this.scrumMarkFile = path.join(devPilotDir, 'last-scrum.txt');
+    this.scrumMarkFile = path.join(devSquireDir, 'last-scrum.txt');
     this.slug = `${owner}/${repo}`;
   }
 
