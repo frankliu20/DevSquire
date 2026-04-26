@@ -303,6 +303,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 .pipeline-step.done .pipeline-label { color: var(--green); }
 .pipeline-step.active .pipeline-label { color: var(--yellow); font-weight: 500; }
 .pipeline-step.failed .pipeline-label { color: var(--red); }
+.pipeline-step.failed .pipeline-bar { background: var(--red); }
 
 /* ===== Event log ===== */
 .event-log {
@@ -795,18 +796,39 @@ function badgeFor(action) {
 
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
-const PHASES = ['analyzing','exploring','planning','implementing','testing','creating_pr','done','failed'];
+const PHASES = ['analyzing','exploring','planning','implementing','testing','creating_pr','done'];
 const PHASE_LABELS = { analyzing: 'Analyze', exploring: 'Explore', planning: 'Plan', implementing: 'Implement', testing: 'Build/Test', creating_pr: 'PR', done: 'Done' };
+// Map internal phases to pipeline display phases
+const PHASE_MAP = { planned: 'analyzing', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed' };
 function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
   c.innerHTML = list.map(t => {
-    const phaseIdx = PHASES.indexOf(t.phase || 'planned');
-    const phaseClass = t.phase === 'done' ? 'done' : t.phase === 'failed' ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
-    const pipeline = PHASES.slice(0, 7).map((p, i) => {
-      const cls = t.phase === 'failed' && i === phaseIdx ? 'failed' : i < phaseIdx ? 'done' : i === phaseIdx && t.status === 'running' ? 'active' : i === phaseIdx && t.phase === 'done' ? 'done' : '';
+    const rawPhase = t.phase || 'planned';
+    const displayPhase = PHASE_MAP[rawPhase] || 'analyzing';
+    const phaseIdx = PHASES.indexOf(displayPhase);
+    const isFailed = rawPhase === 'failed' || rawPhase === 'test_failed';
+    const phaseClass = rawPhase === 'done' ? 'done' : isFailed ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
+    const pipeline = PHASES.map((p, i) => {
+      var cls = '';
+      if (isFailed && i === phaseIdx) cls = 'failed';
+      else if (rawPhase === 'done' || i < phaseIdx) cls = 'done';
+      else if (i === phaseIdx && (t.status === 'running' || t.status === 'orphan')) cls = 'active';
       return '<div class="pipeline-step ' + cls + '"><div class="pipeline-bar"></div><div class="pipeline-label">' + (PHASE_LABELS[p] || p) + '</div></div>';
     }).join('');
+
+    // Latest status: use last event detail, or phase label, never raw numbers
+    var latestStatus = PHASE_LABELS[displayPhase] || rawPhase;
+    if (t.events && t.events.length) {
+      var lastEvt = t.events[t.events.length - 1];
+      var msg = lastEvt.phase || lastEvt.type || '';
+      // Prefer human-readable phase label
+      if (PHASE_LABELS[msg]) msg = PHASE_LABELS[msg];
+      else if (PHASE_MAP[msg]) msg = PHASE_LABELS[PHASE_MAP[msg]] || msg;
+      if (msg && typeof msg === 'string' && msg.length > 1) latestStatus = msg;
+    }
+    if (t.waiting) latestStatus += ' ⏳';
+    var badgeClass = rawPhase === 'done' ? 'badge-green' : isFailed ? 'badge-red' : t.status === 'orphan' ? 'badge-neutral' : 'badge-yellow';
 
     const eventsHtml = t.events && expandedTask === t.id
       ? '<div class="event-log">' + t.events.slice(-15).map(e =>
@@ -818,7 +840,7 @@ function renderTasks(list) {
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
-        <span class="badge \${t.phase === 'done' ? 'badge-green' : t.phase === 'failed' ? 'badge-red' : t.status === 'orphan' ? 'badge-neutral' : 'badge-yellow'}">\${t.status === 'orphan' ? 'orphan' : (t.events && t.events.length ? esc(t.events[t.events.length - 1].message || t.events[t.events.length - 1].phase || t.phase || t.status) : (t.phase || t.status))}</span>
+        <span class="badge \${badgeClass}">\${t.status === 'orphan' ? 'orphan' : esc(latestStatus)}</span>
       </div>
       <div class="pipeline">\${pipeline}</div>
       <div class="task-meta">
