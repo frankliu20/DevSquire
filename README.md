@@ -10,6 +10,8 @@
 </p>
 
 <p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=frankliu20.devsquire-vscode"><img src="https://img.shields.io/visual-studio-marketplace/v/frankliu20.devsquire-vscode?label=Marketplace" alt="Marketplace"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=frankliu20.devsquire-vscode"><img src="https://img.shields.io/visual-studio-marketplace/i/frankliu20.devsquire-vscode?label=Installs" alt="Installs"></a>
   <a href="https://github.com/frankliu20/DevSquire/actions/workflows/ci.yml"><img src="https://github.com/frankliu20/DevSquire/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/frankliu20/DevSquire/blob/main/LICENSE"><img src="https://img.shields.io/github/license/frankliu20/DevSquire" alt="License"></a>
   <a href="https://github.com/frankliu20/DevSquire/releases"><img src="https://img.shields.io/github/v/release/frankliu20/DevSquire" alt="Release"></a>
@@ -41,28 +43,23 @@ DevSquire eliminates that overhead. Point it at an issue, and it delivers a test
 
 ### 🚀 Develop Issues
 
-Point at a GitHub issue — DevSquire analyzes it, explores the codebase, plans a solution, implements it, runs tests, and creates a PR. Fully autonomous.
+Issue in, PR out. Analyze → explore → plan → implement → test → create PR — fully autonomous.
 
 ### 🔍 Review PRs
 
-Structured code review with three strategies:
-- **normal** — interactive, pause for your input
-- **auto** — review and publish immediately
-- **quick-approve** — approve or block, no middle ground
-
-Configurable severity filtering: `high` / `medium` / `low`.
+Structured review with three modes: `normal` (interactive), `auto` (publish immediately), `quick-approve` (approve or block). Severity filtering: `high` / `medium` / `low`.
 
 ### 👁️ Watch PRs
 
-Continuous monitoring of open PRs. Auto-detects CI failures and review comments. Optionally auto-fixes and pushes — keeping your PRs green.
+Monitor open PRs continuously. Auto-detect CI failures and review comments, auto-fix and push — PRs stay green.
 
 ### 📊 Dashboard
 
-Real-time pipeline visualization with six tabs: Issues, PRs, Tasks, Actions, Skills, and Report. One-click actions for everything.
+Six tabs — Issues, PRs, Tasks, Actions, Skills, Report. Live pipeline progress, one-click actions.
 
 ### 📋 End-of-Day Report
 
-Generate a scrum-style summary: issues closed, PRs merged, open work. Ready for standups.
+One-click scrum summary: issues closed, PRs merged, open work.
 
 ## Screenshots
 
