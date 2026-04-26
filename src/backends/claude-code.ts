@@ -45,6 +45,11 @@ export class ClaudeCodeBackend implements SquireBackend {
     options.terminal.sendText(`claude -p "${sanitized}"`, true);
   }
 
+  launchInteractiveCommand(options: PromptLaunchOptions): void {
+    const sanitized = options.prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
+    options.terminal.sendText(`claude "${sanitized}"`, true);
+  }
+
   getAgentSyncDirs(location: 'home' | 'project', workspaceRoot: string): { agents: string; commands: string } {
     const base = location === 'project'
       ? path.join(workspaceRoot, '.claude')

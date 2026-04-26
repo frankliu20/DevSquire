@@ -31,6 +31,8 @@ interface AgentLaunch {
   agent?: string;
   prompt?: string;
   initialPrompt?: string;
+  /** Slash command to run interactively (not single-shot) */
+  interactivePrompt?: string;
 }
 
 export class TaskRunner {
@@ -212,7 +214,14 @@ export class TaskRunner {
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, { prompt: command }, this.workspaceRoot, terminalTitle, 'terminal');
+    // Slash commands run interactively (not single-shot) so the AI can
+    // prompt the user for missing arguments — matching dev-pilot behavior.
+    const isSlashCommand = command.startsWith('/');
+    if (isSlashCommand) {
+      this.launchTerminal(taskInfo, { interactivePrompt: command }, this.workspaceRoot, terminalTitle, 'terminal');
+    } else {
+      this.launchTerminal(taskInfo, { prompt: command }, this.workspaceRoot, terminalTitle, 'terminal');
+    }
     return taskInfo;
   }
 
@@ -309,6 +318,8 @@ export class TaskRunner {
 
     if (launch.agent) {
       this.backend.launchAgent({ terminal, agentName: launch.agent, initialPrompt: launch.initialPrompt });
+    } else if (launch.interactivePrompt) {
+      this.backend.launchInteractiveCommand({ terminal, prompt: launch.interactivePrompt });
     } else if (launch.prompt) {
       this.backend.launchPrompt({ terminal, prompt: launch.prompt });
     }

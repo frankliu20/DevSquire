@@ -22,8 +22,11 @@ export interface SquireBackend {
   /** Launch an agent-based task in a terminal (or chat panel) */
   launchAgent(options: AgentLaunchOptions): void;
 
-  /** Launch a plain prompt task */
+  /** Launch a plain prompt task (single-shot, non-interactive) */
   launchPrompt(options: PromptLaunchOptions): void;
+
+  /** Launch a slash command interactively (not single-shot) */
+  launchInteractiveCommand(options: PromptLaunchOptions): void;
 
   /** Where to sync agent .md files for this backend */
   getAgentSyncDirs(location: 'home' | 'project', workspaceRoot: string): { agents: string; commands?: string };

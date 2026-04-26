@@ -20,6 +20,12 @@ export class CopilotCliBackend implements SquireBackend {
     options.terminal.sendText(`copilot -i "${sanitized}" --allow-all`, true);
   }
 
+  launchInteractiveCommand(options: PromptLaunchOptions): void {
+    // Copilot CLI doesn't have a non-single-shot mode, so use the same approach
+    const sanitized = options.prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
+    options.terminal.sendText(`copilot -i "${sanitized}" --allow-all`, true);
+  }
+
   getAgentSyncDirs(location: 'home' | 'project', workspaceRoot: string): { agents: string } {
     if (location === 'project') {
       return { agents: path.join(workspaceRoot, '.github', 'copilot', 'agents') };
