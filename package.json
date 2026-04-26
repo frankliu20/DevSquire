@@ -20,6 +20,7 @@
   },
   "keywords": [
     "ai",
+    "ai-coding",
     "agent",
     "agentic",
     "engineering",
@@ -27,18 +28,18 @@
     "issues",
     "pull-request",
     "code-review",
+    "ci-cd",
     "automation",
+    "dashboard",
+    "productivity",
     "claude",
-    "devops",
-    "productivity"
+    "copilot"
   ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other",
-    "Machine Learning",
-    "Programming Languages"
+    "Other"
   ],
   "galleryBanner": {
     "color": "#0D1117",
