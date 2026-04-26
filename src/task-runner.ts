@@ -309,9 +309,23 @@ export class TaskRunner {
   }
 
   focusTerminal(taskId: string): void {
+    // Direct lookup first
     const task = this.tasks.get(taskId);
     if (task?.terminal) {
       task.terminal.show();
+      return;
+    }
+    // Fallback: decision taskIds use "issue-<N>" format but TaskRunner uses
+    // "dev-<timestamp>".  Match by issue number in the task's issueUrl.
+    const issueMatch = taskId.match(/^issue-(\d+)$/);
+    if (issueMatch) {
+      const num = issueMatch[1];
+      for (const t of this.tasks.values()) {
+        if (t.terminal && t.issueUrl?.endsWith(`/issues/${num}`)) {
+          t.terminal.show();
+          return;
+        }
+      }
     }
   }
 

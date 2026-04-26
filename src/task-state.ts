@@ -182,16 +182,36 @@ export class TaskStateReader {
   /** Dismiss a decision */
   dismissDecision(decisionId: string): boolean {
     const decisionsDir = path.join(this.squireDir, 'pending-decisions');
-    const filePath = path.join(decisionsDir, `${decisionId}.json`);
+    // Try direct filename match first (file named <id>.json)
+    const directPath = path.join(decisionsDir, `${decisionId}.json`);
     try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+      if (fs.existsSync(directPath)) {
+        fs.unlinkSync(directPath);
         return true;
       }
-      return false;
     } catch {
-      return false;
+      // fall through to content search
     }
+    // Fallback: decision id may differ from filename (e.g. id "issue-21-<ts>"
+    // but file is "issue-21.json").  Scan files for matching id field.
+    try {
+      const files = fs.readdirSync(decisionsDir).filter((f) => f.endsWith('.json'));
+      for (const file of files) {
+        const fp = path.join(decisionsDir, file);
+        try {
+          const data = JSON.parse(fs.readFileSync(fp, 'utf-8'));
+          if (data.id === decisionId) {
+            fs.unlinkSync(fp);
+            return true;
+          }
+        } catch {
+          // skip malformed
+        }
+      }
+    } catch {
+      // directory may not exist
+    }
+    return false;
   }
 
   /** Delete a task's log file */
