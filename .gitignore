@@ -4,3 +4,7 @@ dist/
 .vscode-test/
 .squire/
 claude/
+CLAUDE.md
+.env*
+*.pem
+*.key
