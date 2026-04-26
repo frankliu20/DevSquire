@@ -300,9 +300,22 @@ export class TaskRunner {
     return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  /** Find a task by runtime ID or taskLogId */
+  private findTask(taskId: string): [string, TaskInfo] | undefined {
+    // Direct runtime ID lookup
+    const direct = this.tasks.get(taskId);
+    if (direct) return [taskId, direct];
+    // Fallback: match by taskLogId
+    for (const [id, t] of this.tasks) {
+      if (t.taskLogId === taskId) return [id, t];
+    }
+    return undefined;
+  }
+
   killTask(taskId: string): void {
-    const task = this.tasks.get(taskId);
-    if (task?.terminal) {
+    const found = this.findTask(taskId);
+    if (found?.[1]?.terminal) {
+      const task = found[1];
       task.terminal.sendText('\x03', false); // Ctrl+C
       task.status = 'failed';
       this._onTasksChanged.fire();
@@ -311,14 +324,20 @@ export class TaskRunner {
   }
 
   cleanupTask(taskId: string): void {
-    const task = this.tasks.get(taskId);
-    if (task?.terminal) {
-      task.terminal.dispose();
+    const found = this.findTask(taskId);
+    if (found) {
+      const [runtimeId, task] = found;
+      if (task.terminal) task.terminal.dispose();
+      if (task.worktreeBranch) {
+        this.worktree.remove(this.workspaceRoot, task.worktreeBranch);
+      }
+      this.tasks.delete(runtimeId);
     }
-    if (task?.worktreeBranch) {
-      this.worktree.remove(this.workspaceRoot, task.worktreeBranch);
+    // Also clean JSONL log if taskId is a taskLogId
+    if (taskId.startsWith('task-')) {
+      const logFile = path.join(this.squireDir.logsDir, `${taskId}.jsonl`);
+      try { if (fs.existsSync(logFile)) fs.unlinkSync(logFile); } catch { /* non-critical */ }
     }
-    this.tasks.delete(taskId);
     this._onTasksChanged.fire();
     this.squireDir.log('extension', `Task ${taskId} cleaned up`);
   }
@@ -409,18 +428,10 @@ export class TaskRunner {
   }
 
   focusTerminal(taskId: string): void {
-    // Direct lookup by runtime id
-    const task = this.tasks.get(taskId);
-    if (task?.terminal) {
-      task.terminal.show();
+    const found = this.findTask(taskId);
+    if (found?.[1]?.terminal) {
+      found[1].terminal.show();
       return;
-    }
-    // Lookup by taskLogId (decisions use taskLogId like "task-issue-35")
-    for (const t of this.tasks.values()) {
-      if (t.terminal && t.taskLogId === taskId) {
-        t.terminal.show();
-        return;
-      }
     }
     // Fallback: extract issue number and match by issueUrl
     const issueMatch = taskId.match(/issue-(\d+)/);
