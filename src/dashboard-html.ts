@@ -840,7 +840,7 @@ function renderTasks(list) {
     const isFailed = rawPhase === 'failed' || rawPhase === 'test_failed';
     const phaseClass = rawPhase === 'done' ? 'done' : isFailed ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
     // For cyclic: show unique steps, only highlight current; for linear: show progress bar
-    const displayPhases = isCyclic ? phases : phases.filter(p => p !== 'done');
+    const displayPhases = isCyclic ? phases : (phases.length <= 2 ? phases : phases.filter(p => p !== 'done'));
     const pipeline = displayPhases.map((p, i) => {
       var cls = '';
       if (isCyclic) {
