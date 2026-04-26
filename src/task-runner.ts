@@ -239,17 +239,20 @@ export class TaskRunner {
   /** Run a custom command or prompt — matches dashboard run-command */
   async runCommand(command: string): Promise<TaskInfo> {
     const adhocId = `dev-adhoc-${Date.now()}`;
+    const isDevIssue = command.includes('squire-dev-issue');
+    const isWatchPR = command.includes('squire-watch-pr');
     const label = command.startsWith('/')
       ? command.split(' ')[0]
       : command.substring(0, 40) + (command.length > 40 ? '…' : '');
-    const terminalTitle = command.startsWith('/')
-      ? `Squire: ${command.split(' ')[0]}`
+    const terminalTitle = isDevIssue ? `Squire: ${adhocId}`
+      : isWatchPR ? 'Squire: Watch PRs'
+      : command.startsWith('/') ? `Squire: ${command.split(' ')[0]}`
       : `Squire: ${adhocId}`;
 
     const taskInfo: TaskInfo = {
-      id: adhocId,
-      type: 'run-command',
-      label,
+      id: isWatchPR ? `watch-${Date.now()}` : adhocId,
+      type: isDevIssue ? 'dev-issue' : isWatchPR ? 'watch-pr' : 'run-command',
+      label: isDevIssue ? `[Auto] ${adhocId}` : isWatchPR ? 'Watch PRs' : label,
       status: 'running',
       createdAt: Date.now(),
     };

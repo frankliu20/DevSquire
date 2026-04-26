@@ -990,7 +990,6 @@ function toggleSkill(name) {
   });
 }
 function runSkill(name) {
-  if (isRunnableAgent(name)) { promptRunAgent(name); return; }
   vscode.postMessage({ type: 'runCommand', command: '/' + name }); toast('Running /' + name, 'info');
 }
 function isRunnableAgent(name) {
@@ -1003,13 +1002,9 @@ function promptRunAgent(name) {
     toast('Launching Watch PRs...', 'info');
     return;
   }
-  if (name === 'squire-dev-issue') {
-    vscode.postMessage({ type: 'runAgent', agent: name, input: '' });
-    toast('Launching Dev Issue...', 'info');
-    return;
-  }
-  var placeholder = 'Enter input for ' + name;
-  vscode.postMessage({ type: 'promptInput', agent: name, placeholder: placeholder });
+  // Agent-type skills (e.g. Copilot backend) — launch directly
+  vscode.postMessage({ type: 'runAgent', agent: name, input: '' });
+  toast('Launching ' + name + '...', 'info');
 }
 
 // ===== Report =====
