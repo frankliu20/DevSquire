@@ -317,6 +317,15 @@ export class TaskRunner {
         this.tasks.delete(id);
       }
     }
+    // Remove all git worktrees under .squire/worktrees/ properly
+    const worktrees = this.worktree.list(this.workspaceRoot);
+    const squireWorktreePrefix = path.join(this.workspaceRoot, '.squire', 'worktrees').replace(/\\/g, '/');
+    for (const wt of worktrees) {
+      const wtPath = wt.path.replace(/\\/g, '/');
+      if (wtPath.startsWith(squireWorktreePrefix) && wt.branch) {
+        this.worktree.remove(this.workspaceRoot, wt.branch, true);
+      }
+    }
     this.squireDir.log('extension', 'Clean all: removed logs, pending-decisions, worktrees');
     this.squireDir.cleanDirs();
     this._onTasksChanged.fire();
