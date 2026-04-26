@@ -89,26 +89,6 @@ export class WorktreeManager {
     }
   }
 
-  /**
-   * Ensure .squire/worktrees is in .gitignore
-   */
-  ensureGitignore(repoDir: string): void {
-    const gitignorePath = path.join(repoDir, '.gitignore');
-    const entry = '.squire/worktrees/';
-
-    try {
-      let content = '';
-      if (fs.existsSync(gitignorePath)) {
-        content = fs.readFileSync(gitignorePath, 'utf-8');
-      }
-      if (!content.includes(entry)) {
-        fs.appendFileSync(gitignorePath, `\n# DevSquire worktrees\n${entry}\n`);
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
   private parseWorktreeList(output: string): WorktreeInfo[] {
     const worktrees: WorktreeInfo[] = [];
     let current: Partial<WorktreeInfo> = {};
