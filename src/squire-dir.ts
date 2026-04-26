@@ -28,19 +28,13 @@ export class SquireDir {
     this.ensureConfig();
   }
 
-  /** Add .squire/ to .gitignore if not already there */
+  /** Place a .gitignore inside .squire/ to ignore its own contents (never modify project .gitignore) */
   ensureGitignore(): void {
-    const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
-    const entry = '.squire/';
+    const gitignorePath = path.join(this.dir, '.gitignore');
 
     try {
-      let content = '';
-      if (fs.existsSync(gitignorePath)) {
-        content = fs.readFileSync(gitignorePath, 'utf-8');
-      }
-      if (!content.includes(entry)) {
-        const section = `\n# DevSquire workspace data\n${entry}\n`;
-        fs.appendFileSync(gitignorePath, section);
+      if (!fs.existsSync(gitignorePath)) {
+        fs.writeFileSync(gitignorePath, '# Ignore everything in .squire/ except this file\n*\n!.gitignore\n');
       }
     } catch {
       // Non-critical — continue

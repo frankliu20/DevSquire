@@ -77,7 +77,6 @@ export class TaskRunner {
 
     const branchName = issueNum ? `dev/issue-${issueNum}` : `dev/task-${Date.now()}`;
 
-    this.worktree.ensureGitignore(this.workspaceRoot);
     const wt = this.worktree.create(this.workspaceRoot, branchName);
 
     const terminalTitle = issueNum
