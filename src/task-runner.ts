@@ -223,13 +223,14 @@ export class TaskRunner {
 
   /** Run a custom command or prompt — matches dashboard run-command */
   async runCommand(command: string): Promise<TaskInfo> {
+    const adhocId = `adhoc-${Date.now()}`;
     const label = command.startsWith('/')
       ? command.split(' ')[0]
       : command.substring(0, 40) + (command.length > 40 ? '…' : '');
-    const terminalTitle = `Squire: ${label}`;
+    const terminalTitle = `Squire: ${adhocId}`;
 
     const taskInfo: TaskInfo = {
-      id: `cmd-${Date.now()}`,
+      id: adhocId,
       type: 'run-command',
       label,
       status: 'running',
