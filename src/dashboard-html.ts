@@ -994,7 +994,7 @@ function runSkill(name) {
   vscode.postMessage({ type: 'runCommand', command: '/' + name }); toast('Running /' + name, 'info');
 }
 function isRunnableAgent(name) {
-  var runnable = ['squire-watch-pr'];
+  var runnable = ['squire-watch-pr', 'squire-dev-issue'];
   return runnable.indexOf(name) !== -1;
 }
 function promptRunAgent(name) {
