@@ -18,6 +18,7 @@ export class ClaudeCodeBackend implements SquireBackend {
   private static readonly COMMAND_AGENTS = new Set([
     'squire-dev-issue',
     'squire-watch-pr',
+    'squire-pr-reviewer',
   ]);
 
   launchAgent(options: AgentLaunchOptions): void {

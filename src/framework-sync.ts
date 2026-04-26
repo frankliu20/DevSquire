@@ -34,7 +34,7 @@ export class FrameworkSync {
 
     if (targetDirs.commands) {
       // Backend has separate commands dir — split files by COMMAND_AGENTS list
-      const commandNames = new Set(['squire-dev-issue', 'squire-watch-pr']);
+      const commandNames = new Set(['squire-dev-issue', 'squire-watch-pr', 'squire-pr-reviewer']);
       synced += this.syncDir(srcDir, targetDirs.commands, (f) => commandNames.has(f.replace('.md', '')));
       synced += this.syncDir(srcDir, targetDirs.agents, (f) => !commandNames.has(f.replace('.md', '')));
     } else {
