@@ -107,6 +107,13 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.taskRunner.runAgent(msg.agent, msg.input);
         break;
       }
+      case 'promptInput': {
+        const input = await vscode.window.showInputBox({ prompt: msg.placeholder, placeHolder: msg.placeholder });
+        if (input?.trim()) {
+          this.taskRunner.runAgent(msg.agent, input.trim());
+        }
+        break;
+      }
       case 'watchPRs': {
         this.taskRunner.runWatchPRs();
         break;

@@ -933,11 +933,7 @@ function promptRunAgent(name) {
     return;
   }
   var placeholder = name === 'squire-dev-issue' ? 'Enter issue URL or description' : 'Enter input for ' + name;
-  var input = prompt(placeholder);
-  if (input !== null && input.trim()) {
-    vscode.postMessage({ type: 'runAgent', agent: name, input: input.trim() });
-    toast('Launching ' + name + '...', 'info');
-  }
+  vscode.postMessage({ type: 'promptInput', agent: name, placeholder: placeholder });
 }
 
 // ===== Report =====
