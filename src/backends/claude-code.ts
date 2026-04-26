@@ -29,9 +29,10 @@ export class ClaudeCodeBackend implements SquireBackend {
         true,
       );
     } else {
-      // Agents: launched via --agent flag
+      // Agents: launched in interactive mode (not single-shot -p) so the
+      // agent can make multiple tool calls without hanging.  See #24, #15.
       const prompt = options.initialPrompt
-        ? ` -p "${options.initialPrompt.replace(/"/g, '\\"')}"`
+        ? ` "${options.initialPrompt.replace(/"/g, '\\"')}"`
         : '';
       options.terminal.sendText(
         `claude --agent ${options.agentName}${prompt}`,
