@@ -44,22 +44,22 @@
 ### 仪表盘 — Issue 管理
 直接在仪表盘中浏览和开发 GitHub Issue。
 
-![Dashboard Issues](docs/screenshots/dashboard-issues.png)
+<img src="docs/screenshots/dashboard-issues.png" width="100%" />
 
 ### 任务流水线 — 实时进度
 每个任务都有实时进度流水线。开发 Issue 经过 7 个阶段；PR 审查经过 3 个阶段。
 
-![Tasks Pipeline](docs/screenshots/tasks-pipeline.png)
+<img src="docs/screenshots/tasks-pipeline.png" width="100%" />
 
 ### Agent 工作中 — 终端集成
 任务在 VS Code 终端中运行。点击 **Terminal** 实时查看 AI Agent 的工作过程。
 
-![Tasks Terminal](docs/screenshots/tasks-terminal.png)
+<img src="docs/screenshots/tasks-terminal.png" width="100%" />
 
 ### 每日报告
 一键生成每日 Scrum 摘要。
 
-![Report](docs/screenshots/report.png)
+<img src="docs/screenshots/report.png" width="100%" />
 
 ## 快速开始
 
