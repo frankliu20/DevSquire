@@ -281,6 +281,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         status: rt.status,
         phase,
         waiting: isWaiting,
+        isOwnPR: rt.isOwnPR,
         branch: logTask?.branch || rt.worktreeBranch,
         prNumber: logTask?.prNumber || rt.prNumber,
         worktreeDir: rt.worktreeDir,

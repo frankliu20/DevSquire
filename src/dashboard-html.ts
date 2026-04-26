@@ -831,7 +831,9 @@ function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
   c.innerHTML = list.map(t => {
-    const phases = PHASE_PIPELINES[t.type] || PHASE_PIPELINES['dev-issue'];
+    var phases = PHASE_PIPELINES[t.type] || PHASE_PIPELINES['dev-issue'];
+    // Own PR reviews don't need 'published' step
+    if (t.type === 'review-pr' && t.isOwnPR) phases = ['reviewing', 'done'];
     const isCyclic = CYCLIC_TYPES[t.type] || false;
     const rawPhase = t.phase || 'planned';
     const displayPhase = PHASE_MAP[rawPhase] || phases[0];

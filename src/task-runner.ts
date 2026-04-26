@@ -16,6 +16,7 @@ export interface TaskInfo {
   label: string;
   issueUrl?: string;
   prNumber?: number;
+  isOwnPR?: boolean;
   worktreeBranch?: string;
   worktreeDir?: string;
   terminal?: vscode.Terminal;
@@ -198,6 +199,7 @@ export class TaskRunner {
       type: 'review-pr',
       label: `${strategySuffix} Review PR ${prLabel}${prTitle ? ' ' + prTitle : ''}`,
       prNumber,
+      isOwnPR: !!config?.isOwn,
       status: 'running',
       createdAt: ts,
     };
