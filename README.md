@@ -1,3 +1,5 @@
+English | [中文](README.zh-CN.md)
+
 # Dev Pilot for VS Code
 
 AI engineering team dashboard — orchestrate [Dev Pilot](https://github.com/anthropics/dev-pilot) workflows with GitHub Copilot CLI, worktree isolation, all from VS Code.
