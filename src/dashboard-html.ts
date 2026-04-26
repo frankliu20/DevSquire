@@ -284,6 +284,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 .task-card.running { border-left: 3px solid var(--yellow); }
 .task-card.done { border-left: 3px solid var(--green); }
 .task-card.failed { border-left: 3px solid var(--red); }
+.task-card.orphan { border-left: 3px solid var(--fg-muted); opacity: 0.75; }
 .task-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-1); }
 .task-label { font-weight: 600; font-size: var(--text-base); }
 .task-meta { font-size: var(--text-xs); color: var(--fg-muted); margin-bottom: var(--sp-1); font-family: var(--font-mono); }
@@ -610,7 +611,7 @@ function issueTaskId(num) {
 }
 function phaseBadge(phase) {
   if (!phase) return '';
-  const map = { done: 'badge-green', failed: 'badge-red', implementing: 'badge-yellow', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-blue', creating_pr: 'badge-purple' };
+  const map = { done: 'badge-green', failed: 'badge-red', orphan: 'badge-neutral', implementing: 'badge-yellow', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-blue', creating_pr: 'badge-purple' };
   const cls = Object.entries(map).find(([k]) => phase.includes(k))?.[1] || 'badge-neutral';
   return '<span class="badge ' + cls + '">' + esc(phase) + '</span>';
 }
@@ -778,7 +779,7 @@ function renderTasks(list) {
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
   c.innerHTML = list.map(t => {
     const phaseIdx = PHASES.indexOf(t.phase || 'planned');
-    const phaseClass = t.phase === 'done' ? 'done' : t.phase === 'failed' ? 'failed' : t.status === 'running' ? 'running' : '';
+    const phaseClass = t.phase === 'done' ? 'done' : t.phase === 'failed' ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
     const pipeline = PHASES.slice(0, 7).map((_, i) => {
       const cls = i < phaseIdx ? 'done' : i === phaseIdx && t.status === 'running' ? 'active' : '';
       return '<div class="pipeline-step ' + cls + '"></div>';
@@ -794,7 +795,7 @@ function renderTasks(list) {
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
-        <span class="badge \${t.phase === 'done' ? 'badge-green' : t.phase === 'failed' ? 'badge-red' : 'badge-yellow'}">\${t.phase || t.status}</span>
+        <span class="badge \${t.phase === 'done' ? 'badge-green' : t.phase === 'failed' ? 'badge-red' : t.status === 'orphan' ? 'badge-neutral' : 'badge-yellow'}">\${t.status === 'orphan' ? 'orphan' : (t.phase || t.status)}</span>
       </div>
       <div class="pipeline">\${pipeline}</div>
       <div class="task-meta">
@@ -804,7 +805,8 @@ function renderTasks(list) {
       <div class="task-actions">
         \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
         \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\')">Worktree</button>' : ''}
-        \${t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
+        \${t.status === 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean orphan?\\',\\'Remove logs, decisions, and worktree for this orphan task.\\',()=>cleanupOrphan(\\''+t.id+'\\'))">Clean</button>' : ''}
+        \${t.status !== 'running' && t.status !== 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
         \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Send Ctrl+C to the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
       </div>
       \${eventsHtml}
@@ -814,6 +816,7 @@ function renderTasks(list) {
 function toggleTaskEvents(id) { expandedTask = expandedTask === id ? null : id; renderTasks(tasks); }
 function killTask(id) { vscode.postMessage({ type: 'killTask', taskId: id }); }
 function cleanupTask(id) { vscode.postMessage({ type: 'cleanupTask', taskId: id }); }
+function cleanupOrphan(id) { vscode.postMessage({ type: 'cleanupOrphan', taskId: id }); }
 function cleanAll() { vscode.postMessage({ type: 'cleanAll' }); }
 function syncMain() { vscode.postMessage({ type: 'syncMain' }); }
 function openWorktree(id) { vscode.postMessage({ type: 'openWorktree', taskId: id }); }
@@ -1033,7 +1036,7 @@ window.addEventListener('message', e => {
       break;
     case 'tasks':
       tasks = msg.data;
-      document.getElementById('statTasks').textContent = tasks.filter(t => t.status === 'running').length;
+      document.getElementById('statTasks').textContent = tasks.filter(t => t.status === 'running' || t.status === 'orphan').length;
       renderTasks(tasks);
       if (issuesLoaded) filterIssues(); // refresh issue phase badges
       break;

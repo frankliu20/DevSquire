@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
@@ -16,7 +18,7 @@ export interface TaskInfo {
   worktreeBranch?: string;
   worktreeDir?: string;
   terminal?: vscode.Terminal;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'orphan';
   createdAt: number;
 }
 
@@ -271,6 +273,39 @@ export class TaskRunner {
     this.tasks.delete(taskId);
     this._onTasksChanged.fire();
     this.squireDir.log('extension', `Task ${taskId} cleaned up`);
+  }
+
+  /** Clean an orphan task: remove its JSONL log, pending decisions, and optionally its worktree */
+  cleanOrphanTask(taskId: string): void {
+    // Delete JSONL log file
+    const logFile = path.join(this.squireDir.logsDir, `${taskId}.jsonl`);
+    try {
+      if (fs.existsSync(logFile)) {
+        fs.unlinkSync(logFile);
+      }
+    } catch { /* non-critical */ }
+
+    // Delete any pending decision for this task
+    const decisionFile = path.join(this.squireDir.decisionsDir, `${taskId}.json`);
+    try {
+      if (fs.existsSync(decisionFile)) {
+        fs.unlinkSync(decisionFile);
+      }
+    } catch { /* non-critical */ }
+
+    // Try to remove worktree if it exists — extract branch from taskId
+    const issueMatch = taskId.match(/issue-(\d+)/);
+    if (issueMatch) {
+      const branchPatterns = [`dev/issue-${issueMatch[1]}`, `fix/issue-${issueMatch[1]}`, `feat/issue-${issueMatch[1]}`];
+      for (const branch of branchPatterns) {
+        try {
+          this.worktree.remove(this.workspaceRoot, branch);
+        } catch { /* ignore — branch may not exist */ }
+      }
+    }
+
+    this._onTasksChanged.fire();
+    this.squireDir.log('extension', `Orphan task ${taskId} cleaned up`);
   }
 
   cleanAll(): void {
