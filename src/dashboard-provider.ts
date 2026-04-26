@@ -128,7 +128,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         break;
       }
       case 'openWorktree': {
-        this.taskRunner.openWorktree(msg.taskId);
+        this.taskRunner.openWorktree(msg.taskId, msg.worktreeDir);
         break;
       }
       case 'focusTerminal': {

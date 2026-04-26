@@ -804,7 +804,7 @@ function renderTasks(list) {
       </div>
       <div class="task-actions">
         \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
-        \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\')">Worktree</button>' : ''}
+        \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>' : ''}
         \${t.status === 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();cleanupOrphan(\\''+t.id+'\\')">Clean</button>' : ''}
         \${t.status !== 'running' && t.status !== 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
         \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Send Ctrl+C to the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
@@ -819,7 +819,7 @@ function cleanupTask(id) { vscode.postMessage({ type: 'cleanupTask', taskId: id 
 function cleanupOrphan(id) { vscode.postMessage({ type: 'cleanupOrphan', taskId: id }); }
 function cleanAll() { vscode.postMessage({ type: 'cleanAll' }); }
 function syncMain() { vscode.postMessage({ type: 'syncMain' }); }
-function openWorktree(id) { vscode.postMessage({ type: 'openWorktree', taskId: id }); }
+function openWorktree(id, dir) { vscode.postMessage({ type: 'openWorktree', taskId: id, worktreeDir: dir }); }
 function focusTerminal(id) { vscode.postMessage({ type: 'focusTerminal', taskId: id }); }
 
 // ===== Actions (Decisions) =====

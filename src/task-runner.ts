@@ -335,10 +335,10 @@ export class TaskRunner {
     }
   }
 
-  openWorktree(taskId: string): void {
-    const task = this.tasks.get(taskId);
-    if (task?.worktreeDir) {
-      const uri = vscode.Uri.file(task.worktreeDir);
+  openWorktree(taskId: string, worktreeDir?: string): void {
+    const dir = worktreeDir || this.tasks.get(taskId)?.worktreeDir;
+    if (dir) {
+      const uri = vscode.Uri.file(dir);
       vscode.commands.executeCommand('vscode.openFolder', uri, true);
     }
   }
