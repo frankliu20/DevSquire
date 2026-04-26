@@ -239,10 +239,23 @@ NOTIFICATION
 
 After every action, append a JSON line to the PR's log file:
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"pr-<N>","type":"<event>","phase":"pr_monitor","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/pr-<N>.jsonl"
+echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"pr-<N>","type":"<event>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/pr-<N>.jsonl"
 ```
 
-Event types: `review_comments`, `ready_to_merge`, `pr_merged`, `ci_failure`, `ci_auto_fix`, `ci_auto_fix_failed`, `comment_auto_fix`, `comment_auto_fix_failed`, `auto_fix_blocked`
+Event types and phases:
+| Event type | Phase | When |
+|-----------|-------|------|
+| `task_start` | `analyzing` | Start of monitoring session |
+| `check_cycle` | `monitoring` | Each polling cycle starts |
+| `ci_failure` | `fixing_ci` | CI failure detected, about to auto-fix |
+| `ci_auto_fix` | `fixing_ci` | Auto-fix pushed for CI |
+| `ci_auto_fix_failed` | `fixing_ci` | Auto-fix failed for CI |
+| `review_comments` | `fixing_comments` | Unresolved comments detected, about to auto-fix |
+| `comment_auto_fix` | `fixing_comments` | Auto-fix pushed for comments |
+| `comment_auto_fix_failed` | `fixing_comments` | Auto-fix failed for comments |
+| `ready_to_merge` | `monitoring` | PR is ready to merge |
+| `pr_merged` | `done` | PR was merged/closed |
+| `auto_fix_blocked` | `failed` | Max attempts reached |
 
 ## Rules
 

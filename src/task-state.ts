@@ -93,6 +93,19 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   skill_captured: 'done',
   pr_merged: 'done',
   worktree_cleaned: 'done',
+  // review-pr events
+  fetch_done: 'reviewing',
+  review_done: 'summarizing',
+  // watch-pr events
+  check_cycle: 'monitoring',
+  ci_failure: 'fixing_ci',
+  ci_auto_fix: 'fixing_ci',
+  ci_auto_fix_failed: 'fixing_ci',
+  review_comments: 'fixing_comments',
+  comment_auto_fix: 'fixing_comments',
+  comment_auto_fix_failed: 'fixing_comments',
+  ready_to_merge: 'monitoring',
+  auto_fix_blocked: 'failed',
 };
 
 /**
