@@ -222,12 +222,19 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     const decisions = this.taskStateReader.readDecisions();
     const waitingTaskIds = new Set(decisions.map(d => d.taskId));
 
+    // Track which log tasks have been claimed by a runtime task
+    const claimedLogIds = new Set<string>();
+
     // Runtime tasks take priority, supplement with log data
     const merged = runtimeTasks.map((rt) => {
       const logTask = logTasks.find(
-        (lt) => lt.issueUrl === rt.issueUrl || lt.id === rt.id
-          || (rt.worktreeBranch && lt.branch === rt.worktreeBranch),
+        (lt) => !claimedLogIds.has(lt.id) && (
+          lt.id === rt.id
+          || (rt.issueUrl && lt.issueUrl === rt.issueUrl)
+          || (rt.worktreeBranch && lt.branch === rt.worktreeBranch)
+        ),
       );
+      if (logTask) claimedLogIds.add(logTask.id);
       const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? 'implementing' : 'planned');
       const isWaiting = waitingTaskIds.has(rt.id) || waitingTaskIds.has(logTask?.id || '');
       return {
@@ -249,9 +256,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
     // Add log-only tasks not in runtime
     for (const lt of logTasks) {
-      if (!merged.find((m) => m.id === lt.id
-        || (lt.issueUrl && runtimeTasks.some(rt => rt.issueUrl === lt.issueUrl))
-        || (lt.branch && runtimeTasks.some(rt => rt.worktreeBranch === lt.branch)))) {
+      if (!claimedLogIds.has(lt.id) && !merged.find((m) => m.id === lt.id)) {
         merged.push({
           id: lt.id,
           label: lt.issueNumber ? `Issue #${lt.issueNumber}` : lt.id,
