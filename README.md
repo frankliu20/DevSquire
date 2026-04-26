@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>One developer + DevSquire = a full engineering team.</strong><br/>
-  Autonomously develops issues, reviews PRs, monitors CI — all from VS Code.
+  Automate your GitHub workflow — from issue to merged PR — without leaving VS Code.
 </p>
 
 <p align="center">
@@ -21,55 +21,86 @@
 
 ---
 
-> **Stop context-switching. Start shipping.** DevSquire is an AI-powered engineering dashboard that turns GitHub issues into pull requests, reviews code with configurable strategies, and monitors your CI pipeline — while you focus on what matters.
+## The Problem
+
+Developers spend **~40% of their time** on repetitive workflow tasks: triaging issues, switching between browser and IDE, manually reviewing PRs, checking CI, and writing standup reports.
+
+DevSquire eliminates that overhead. Point it at an issue, and it delivers a tested PR — autonomously.
 
 ## Why DevSquire?
 
 | | Traditional AI Tools | DevSquire |
 |---|---|---|
 | **Workflow** | Copy-paste between chat and IDE | End-to-end autonomous pipeline |
-| **Issue → PR** | Manual: read issue, plan, code, test, push | One click: analyze → plan → implement → test → create PR |
-| **Code Review** | Generic suggestions | Structured review with severity levels and auto-publish |
-| **CI Monitoring** | Manual checks and fixes | Auto-detect failures, auto-fix, auto-push |
-| **Visibility** | Black box | Real-time dashboard with pipeline progress |
+| **Issue → PR** | Manual: read, plan, code, test, push | One click: analyze → implement → test → PR |
+| **Code Review** | Generic suggestions | Structured review with severity levels |
+| **CI Monitoring** | Manual checks and fixes | Auto-detect, auto-fix, auto-push |
+| **Visibility** | Black box | Real-time dashboard with live progress |
 
 ## Core Features
 
-🚀 **Develop Issues** — Point at a GitHub issue, sit back and watch. DevSquire analyzes the issue, explores the codebase, plans a solution, implements it, runs tests, and creates a PR — all autonomously.
+### 🚀 Develop Issues
 
-🔍 **Review PRs** — Structured code review with three strategies: `normal` (interactive), `auto` (publish immediately), `quick-approve` (approve or block). Configurable severity filtering (high / medium / low).
+Point at a GitHub issue — DevSquire analyzes it, explores the codebase, plans a solution, implements it, runs tests, and creates a PR. Fully autonomous.
 
-👁️ **Watch PRs** — Continuous monitoring of your open PRs. Auto-detects CI failures and review comments. Optionally auto-fixes and pushes — so your PRs stay green.
+### 🔍 Review PRs
 
-📊 **Dashboard** — Real-time pipeline visualization for every task. Six tabs: Issues, PRs, Tasks, Actions, Skills, and Report. One-click actions for everything.
+Structured code review with three strategies:
+- **normal** — interactive, pause for your input
+- **auto** — review and publish immediately
+- **quick-approve** — approve or block, no middle ground
 
-📋 **End-of-Day Report** — Generate a scrum-style summary: issues closed, PRs merged, open work. Perfect for standups.
+Configurable severity filtering: `high` / `medium` / `low`.
+
+### 👁️ Watch PRs
+
+Continuous monitoring of open PRs. Auto-detects CI failures and review comments. Optionally auto-fixes and pushes — keeping your PRs green.
+
+### 📊 Dashboard
+
+Real-time pipeline visualization with six tabs: Issues, PRs, Tasks, Actions, Skills, and Report. One-click actions for everything.
+
+### 📋 End-of-Day Report
+
+Generate a scrum-style summary: issues closed, PRs merged, open work. Ready for standups.
 
 ## Screenshots
 
-### Dashboard — Issue Management
+<details>
+<summary><strong>Dashboard — Issue Management</strong></summary>
+<br/>
 Browse and develop GitHub issues directly from the dashboard.
 
 <img src="docs/screenshots/dashboard-issues.png" width="100%" />
+</details>
 
-### Task Pipeline — Real-Time Progress
+<details>
+<summary><strong>Task Pipeline — Real-Time Progress</strong></summary>
+<br/>
 Every task shows a live progress pipeline. Dev issues go through 7 stages; PR reviews through 3.
 
 <img src="docs/screenshots/tasks-pipeline.png" width="100%" />
+</details>
 
-### Agent at Work — Terminal Integration
-Tasks run in VS Code terminals. Click **Terminal** to see the AI agent working in real time.
+<details>
+<summary><strong>Agent at Work — Terminal Integration</strong></summary>
+<br/>
+Tasks run in VS Code terminals. Click <strong>Terminal</strong> to see the AI agent working in real time.
 
 <img src="docs/screenshots/tasks-terminal.png" width="100%" />
+</details>
 
-### End-of-Day Report
+<details>
+<summary><strong>End-of-Day Report</strong></summary>
+<br/>
 Generate a daily scrum summary with one click.
 
 <img src="docs/screenshots/report.png" width="100%" />
+</details>
 
 ## Quick Start
 
-### Install
+### 1. Install
 
 Search **DevSquire** in the VS Code Extensions Marketplace, or:
 
@@ -77,28 +108,33 @@ Search **DevSquire** in the VS Code Extensions Marketplace, or:
 code --install-extension frankliu20.devsquire-vscode
 ```
 
-### Prerequisites
+### 2. Prerequisites
 
-- [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-- One of the supported AI backends:
-  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI — `claude` command
+- [GitHub CLI](https://cli.github.com/) (`gh`) — installed and authenticated
+- One AI backend:
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — `claude` command
   - [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli) — `gh copilot` command
 
-> DevSquire works with both platforms. Switch anytime via `devSquire.aiPlatform` setting.
+### 3. First Run
+
+1. Open a GitHub-connected project in VS Code
+2. Click the **DevSquire** icon in the sidebar to open the dashboard
+3. Go to the **Issues** tab → pick an issue → click **Develop**
+4. Watch the pipeline progress in the **Tasks** tab
+
+> Switch AI backends anytime via `devSquire.aiPlatform` setting.
 
 ## How It Works
 
 ```
 GitHub Issue ──► DevSquire Dashboard ──► AI Agent in Terminal
                         │                        │
-                        │  real-time progress     │  autonomous pipeline
-                        │  pipeline tracking      │  analyze → plan → code → test
+                   real-time progress       autonomous pipeline
+                   pipeline tracking        analyze → plan → code → test
                         │                        │
                         ▼                        ▼
                  Tasks Tab (live)          Pull Request Created
 ```
-
-**Task Pipelines:**
 
 | Task Type | Pipeline |
 |-----------|----------|
@@ -110,10 +146,10 @@ GitHub Issue ──► DevSquire Dashboard ──► AI Agent in Terminal
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `devSquire.aiPlatform` | `claude-code` | AI platform (`claude-code` or `copilot-cli`) |
-| `devSquire.agentConfigLocation` | `home` | Agent install location: `home` (~/.claude/) or `project` |
+| `devSquire.aiPlatform` | `claude-code` | AI backend: `claude-code` or `copilot-cli` |
+| `devSquire.agentConfigLocation` | `home` | Agent config location: `home` or `project` |
 | `devSquire.autoSyncAgentConfig` | `true` | Auto-sync agents on activation |
-| `devSquire.devIssue.mode` | `auto` | `normal` (pause for approval) or `auto` (fully autonomous) |
+| `devSquire.devIssue.mode` | `auto` | `normal` (pause for approval) or `auto` (autonomous) |
 | `devSquire.reviewPR.mode` | `normal` | `normal`, `auto`, or `quick-approve` |
 | `devSquire.reviewPR.level` | `medium` | Review detail: `high`, `medium`, or `low` |
 | `devSquire.watchPR.autoFixCI` | `true` | Auto-fix CI failures |
