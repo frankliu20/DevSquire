@@ -77,6 +77,16 @@ export class TaskRunner {
       ? `${this.repoUrl}/issues/${issueNum}`
       : issueInput;
 
+    // Duplicate detection: check if a task with same issue is already running
+    if (issueNum) {
+      for (const t of this.tasks.values()) {
+        if (t.status === 'running' && t.issueUrl === issueUrl) {
+          vscode.window.showWarningMessage(`DevSquire: Issue #${issueNum} already has a running task.`);
+          return t;
+        }
+      }
+    }
+
     const branchName = issueNum ? `dev/issue-${issueNum}` : `dev/task-${Date.now()}`;
 
     const wt = this.worktree.create(this.workspaceRoot, branchName);

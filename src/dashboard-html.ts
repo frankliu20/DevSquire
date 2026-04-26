@@ -45,7 +45,8 @@ export function getDashboardHtml(repoInfo: GitHubRepoInfo, defaultMode: string =
   --cyan: var(--vscode-terminal-ansiCyan);
 
   /* Spacing scale */
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-0: 0; --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-7: 28px; --sp-8: 32px; --sp-9: 36px; --sp-10: 40px; --sp-12: 48px; --sp-16: 64px;
 
   /* Radii */
   --r-sm: 3px; --r-md: 5px; --r-lg: 8px; --r-full: 9999px;
@@ -53,6 +54,8 @@ export function getDashboardHtml(repoInfo: GitHubRepoInfo, defaultMode: string =
   /* Shadows — VS Code-aware */
   --shadow-sm: 0 1px 2px var(--vscode-widget-shadow, rgba(0,0,0,0.15));
   --shadow-md: 0 2px 8px var(--vscode-widget-shadow, rgba(0,0,0,0.2));
+  --shadow-lg: 0 4px 16px var(--vscode-widget-shadow, rgba(0,0,0,0.25));
+  --shadow-xl: 0 8px 32px var(--vscode-widget-shadow, rgba(0,0,0,0.3));
 
   /* Transitions */
   --t-fast: 100ms ease; --t-normal: 150ms ease;
@@ -420,6 +423,15 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes slideIn { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes confettiFall { 0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+/* Off-work celebration */
+.offwork-overlay { position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; animation: fadeIn 0.3s; }
+.offwork-msg { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: var(--sp-4); text-align: center; }
+.offwork-sub { font-size: var(--text-lg); color: var(--fg-muted); margin-bottom: var(--sp-2); }
+.offwork-time { font-size: var(--text-xl); color: var(--yellow); font-family: var(--font-mono); }
+.offwork-particle { position: fixed; font-size: 24px; pointer-events: none; animation: confettiFall linear forwards; }
 </style>
 </head>
 <body>
@@ -432,6 +444,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
   </div>
   <div style="display:flex;gap:var(--sp-2);align-items:center">
     <button class="btn-s btn-sec" onclick="syncMain()">Sync Main</button>
+    <button class="btn-s btn-sec" onclick="offWork()">Off Work</button>
     <button class="btn-s btn-sec" onclick="confirmAction('Clean All?','Remove all completed/failed tasks and their worktrees.',()=>cleanAll())">Clean All</button>
     <select id="accountSelect" class="account-select" onchange="switchAccount(this.value)" style="display:none"></select>
   </div>
@@ -717,9 +730,11 @@ function renderPRs() {
       <div class="pr-meta">
         \${pr.branch} → \${pr.baseBranch}
         \${pr.checksStatus ? ' · ' + cisBadge(pr.checksStatus) : ''}
+        \${pr.additions != null ? ' · <span style="color:var(--green)">+' + pr.additions + '</span> <span style="color:var(--red)">-' + pr.deletions + '</span> · ' + pr.changedFiles + ' files' : ''}
         \${pr.commentCount ? ' · ' + pr.commentCount + ' comments' : ''}
         \${pr.unresolvedCount ? ' · <b>' + pr.unresolvedCount + ' unresolved</b>' : ''}
       </div>
+      \${pr.checks && pr.checks.length ? '<div style="margin:var(--sp-1) 0;display:flex;flex-wrap:wrap;gap:var(--sp-1)">' + pr.checks.map(c => '<span class="badge ' + (c.conclusion==='SUCCESS'||c.conclusion==='NEUTRAL'?'badge-green':c.conclusion==='FAILURE'?'badge-red':c.status==='COMPLETED'?'badge-green':'badge-yellow') + '" style="font-size:var(--text-xs)">' + esc(c.name) + '</span>').join('') + '</div>' : ''}
       \${expandedPR === pr.number && pr._body !== undefined ? '<div class="issue-detail" style="margin:var(--sp-1) 0 var(--sp-2);border:1px solid var(--border-subtle);border-radius:var(--r-sm)">' + renderMd(pr._body) + '</div>' : ''}
       \${expandedPR === pr.number && pr._body === undefined ? '<div class="loading" style="padding:var(--sp-2) 0">Loading body</div>' : ''}
       <div class="pr-actions">
@@ -789,6 +804,8 @@ function badgeFor(action) {
     has_unresolved_comments: ['Unresolved', 'badge-yellow'],
     draft: ['Draft', 'badge-neutral'],
     waiting: ['Waiting', 'badge-neutral'],
+    approved: ['Approved', 'badge-green'],
+    merged: ['Merged', 'badge-purple'],
   };
   const [label, cls] = map[action] || ['', 'badge-neutral'];
   return '<span class="badge ' + cls + '">' + label + '</span>';
@@ -864,6 +881,39 @@ function cleanupTask(id) { vscode.postMessage({ type: 'cleanupTask', taskId: id 
 function cleanupOrphan(id) { vscode.postMessage({ type: 'cleanupOrphan', taskId: id }); }
 function cleanAll() { vscode.postMessage({ type: 'cleanAll' }); }
 function syncMain() { vscode.postMessage({ type: 'syncMain' }); }
+function offWork() {
+  const msgs = ['Great work today! 🎉','Time to recharge! 🔋','You crushed it! 💪','See you tomorrow! 👋','Rest well, hero! 🦸','Mission accomplished! 🚀'];
+  const emojis = ['🎉','🌟','✨','🎊','💫','🏆','🍕','🎸','🎮','🎪','🌈','🦄','🎯','🎨','🎵'];
+  const overlay = document.createElement('div');
+  overlay.className = 'offwork-overlay';
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  overlay.innerHTML = '<div class="offwork-msg">' + msgs[Math.floor(Math.random()*msgs.length)] + '</div><div class="offwork-sub">Clock out time</div><div class="offwork-time">' + timeStr + '</div>';
+  document.body.appendChild(overlay);
+  for (let i = 0; i < 40; i++) {
+    const p = document.createElement('div');
+    p.className = 'offwork-particle';
+    p.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    p.style.left = Math.random()*100 + 'vw';
+    p.style.animationDuration = (2 + Math.random()*3) + 's';
+    p.style.animationDelay = Math.random()*2 + 's';
+    document.body.appendChild(p);
+  }
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    [261.63,329.63,392.00,523.25].forEach((f,i) => {
+      const o = ac.createOscillator(); const g = ac.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.15, ac.currentTime + i*0.15);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.15 + 0.4);
+      o.connect(g); g.connect(ac.destination);
+      o.start(ac.currentTime + i*0.15); o.stop(ac.currentTime + i*0.15 + 0.5);
+    });
+  } catch(e) {}
+  const dismiss = () => { overlay.remove(); document.querySelectorAll('.offwork-particle').forEach(p => p.remove()); };
+  overlay.onclick = dismiss;
+  setTimeout(dismiss, 5000);
+}
 function openWorktree(id, dir) { vscode.postMessage({ type: 'openWorktree', taskId: id, worktreeDir: dir }); }
 function focusTerminal(id) { vscode.postMessage({ type: 'focusTerminal', taskId: id }); }
 
@@ -1129,13 +1179,7 @@ document.addEventListener('keydown', e => {
 // ===== Initial load — only issues (lazy load everything else) =====
 refreshIssues();
 vscode.postMessage({ type: 'getAccounts' });
-
-// ===== Poll pending decisions every 10s =====
-setInterval(() => { vscode.postMessage({ type: 'getDecisions' }); }, 10000);
 vscode.postMessage({ type: 'getDecisions' });
-
-// ===== Auto-refresh tasks every 5s =====
-setInterval(() => { if (currentTab === 'tasks' || tasks.some(t => t.status === 'running')) { refreshTasks(); } }, 5000);
 </script>
 </body>
 </html>`;

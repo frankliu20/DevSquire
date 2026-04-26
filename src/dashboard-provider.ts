@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TaskRunner } from './task-runner';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
@@ -10,6 +12,8 @@ import { getDashboardHtml } from './dashboard-html';
 
 export class DashboardViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
+  private watchers: fs.FSWatcher[] = [];
+  private debounceTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -40,6 +44,34 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = getDashboardHtml(this.repoInfo, defaultMode);
 
     webviewView.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
+
+    // Watch .squire/logs/ and .squire/pending-decisions/ for changes (push instead of poll)
+    this.setupFileWatchers();
+
+    webviewView.onDidDispose(() => {
+      this.watchers.forEach(w => w.close());
+      this.watchers = [];
+    });
+  }
+
+  private setupFileWatchers(): void {
+    const logsDir = this.squireDir.logsDir;
+    const decisionsDir = this.squireDir.decisionsDir;
+
+    for (const dir of [logsDir, decisionsDir]) {
+      try {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const watcher = fs.watch(dir, () => {
+          if (this.debounceTimer) clearTimeout(this.debounceTimer);
+          this.debounceTimer = setTimeout(() => {
+            this.sendTasks();
+            const decisions = this.taskStateReader.readDecisions();
+            this.post('decisions', decisions);
+          }, 300);
+        });
+        this.watchers.push(watcher);
+      } catch { /* non-critical — fall back to manual refresh */ }
+    }
   }
 
   private async handleMessage(msg: any): Promise<void> {

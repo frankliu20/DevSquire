@@ -61,6 +61,9 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   manual_verify_done: 'creating_pr',
   pr_created: 'done',
   blocked: 'failed',
+  branch_setup: 'planned',
+  knowledge_capture: 'done',
+  skill_captured: 'done',
 };
 
 /**
@@ -173,7 +176,17 @@ export class TaskStateReader {
         }
       }
 
-      return decisions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      // Auto-expire decisions older than 24h
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const valid: PendingDecision[] = [];
+      for (const d of decisions) {
+        if (new Date(d.createdAt).getTime() < cutoff) {
+          try { fs.unlinkSync(path.join(decisionsDir, `${d.id}.json`)); } catch { /* skip */ }
+        } else {
+          valid.push(d);
+        }
+      }
+      return valid.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     } catch {
       return [];
     }

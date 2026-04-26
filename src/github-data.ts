@@ -30,6 +30,10 @@ export interface GitHubPR {
   commentCount: number;
   unresolvedCount: number;
   checksStatus: string;
+  additions?: number;
+  deletions?: number;
+  changedFiles?: number;
+  checks?: { name: string; status: string; conclusion: string }[];
   body?: string;
   action?: string; // derived: ready_to_merge, ci_failing, review_pending, changes_requested, has_unresolved_comments, draft, waiting
 }
@@ -82,12 +86,14 @@ export class GitHubData {
 
   listMyPRs(limit = 20): GitHubPR[] {
     const prs = this.execGh<GitHubPR[]>(
-      `gh pr list --repo ${this.slug} --state open --author @me --limit ${limit} --json number,title,state,author,headRefName,baseRefName,url,createdAt,updatedAt,isDraft,labels,reviewDecision,comments,body`,
+      `gh pr list --repo ${this.slug} --state open --author @me --limit ${limit} --json number,title,state,author,headRefName,baseRefName,url,createdAt,updatedAt,isDraft,labels,reviewDecision,comments,body,additions,deletions,changedFiles`,
       (raw: any[]) => raw.map(this.mapPR),
     ) || [];
-    // Fetch CI status separately (statusCheckRollup can fail on some gh versions)
+    // Fetch CI status and individual checks
     for (const pr of prs) {
-      pr.checksStatus = this.fetchChecksStatus(pr.number);
+      const checksInfo = this.fetchChecksDetail(pr.number);
+      pr.checksStatus = checksInfo.status;
+      pr.checks = checksInfo.checks;
     }
     return prs.map((pr) => ({ ...pr, action: this.classifyPRAction(pr) }));
   }
@@ -231,20 +237,29 @@ export class GitHubData {
       commentCount: (item.comments || []).length,
       unresolvedCount: 0,
       checksStatus: '',
+      additions: item.additions,
+      deletions: item.deletions,
+      changedFiles: item.changedFiles,
       body: item.body,
     };
   }
 
-  private fetchChecksStatus(prNumber: number): string {
+  private fetchChecksDetail(prNumber: number): { status: string; checks: { name: string; status: string; conclusion: string }[] } {
     try {
       const output = cp.execSync(
         `gh pr view ${prNumber} --repo ${this.slug} --json statusCheckRollup`,
         { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] },
       );
       const data = JSON.parse(output);
-      return this.deriveChecksStatus(data.statusCheckRollup || []);
+      const rollup = data.statusCheckRollup || [];
+      const checks = rollup.map((c: any) => ({
+        name: c.name || c.context || 'check',
+        status: c.status || c.state || '',
+        conclusion: c.conclusion || '',
+      }));
+      return { status: this.deriveChecksStatus(rollup), checks };
     } catch {
-      return '';
+      return { status: '', checks: [] };
     }
   }
 
