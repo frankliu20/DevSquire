@@ -108,6 +108,16 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   auto_fix_blocked: 'failed',
 };
 
+/** All valid phase values for validation */
+const VALID_PHASES = new Set<string>([
+  'planned', 'analyzing', 'exploring', 'planning',
+  'implementing', 'testing', 'test_failed',
+  'waiting_confirm', 'waiting_manual_test',
+  'creating_pr', 'done', 'failed',
+  'fetching', 'reviewing', 'summarizing',
+  'monitoring', 'fixing_ci', 'fixing_comments',
+]);
+
 /**
  * Reads task state from JSONL log files and pending decisions.
  */
@@ -158,11 +168,11 @@ export class TaskStateReader {
           if (!startedAt) startedAt = entry.timestamp;
           updatedAt = entry.timestamp;
 
-          // Derive phase from event type if phase field is missing or generic
-          if (entry.phase) {
-            phase = entry.phase;
-          } else if (entry.type && EVENT_TYPE_TO_PHASE[entry.type]) {
+          // Derive phase: prefer event type mapping, then validated phase field
+          if (entry.type && EVENT_TYPE_TO_PHASE[entry.type]) {
             phase = EVENT_TYPE_TO_PHASE[entry.type];
+          } else if (entry.phase && VALID_PHASES.has(entry.phase)) {
+            phase = entry.phase;
           }
           if (entry.branch) branch = entry.branch;
           if (entry.pr_number) prNumber = entry.pr_number;
