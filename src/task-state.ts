@@ -15,7 +15,7 @@ export type TaskPhase =
 /** Pipeline phases displayed in the dashboard, per task type */
 export const PHASE_PIPELINES: Record<string, TaskPhase[]> = {
   'dev-issue':    ['analyzing', 'exploring', 'planning', 'implementing', 'testing', 'creating_pr', 'done'],
-  'review-pr':    ['reviewing', 'done'],
+  'review-pr':    ['reviewing', 'done', 'published'],
   'watch-pr':     ['analyzing', 'monitoring', 'fixing_ci', 'fixing_comments', 'monitoring'],
   'fix-comments': ['analyzing', 'implementing', 'testing', 'creating_pr', 'done'],
   'run-command':  ['implementing', 'done'],
@@ -94,6 +94,7 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   pr_merged: 'done',
   worktree_cleaned: 'done',
   // review-pr events
+  review_done: 'done',
   review_published: 'published',
   // watch-pr events
   check_cycle: 'monitoring',

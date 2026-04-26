@@ -820,7 +820,7 @@ const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'expl
 // Per-type pipeline phases
 const PHASE_PIPELINES = {
   'dev-issue':    ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'],
-  'review-pr':    ['reviewing','done'],
+  'review-pr':    ['reviewing','done','published'],
   'watch-pr':     ['analyzing','monitoring','fixing_ci','fixing_comments','monitoring'],
   'fix-comments': ['analyzing','implementing','testing','creating_pr','done'],
   'run-command':  ['implementing','done'],

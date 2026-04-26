@@ -260,9 +260,14 @@ When the user asks to fix a comment:
 
 ## Status Logging
 
-The extension handles `reviewing` and `done` phases automatically. You do NOT need to log those.
+The extension writes `reviewing` on task start. You handle the rest:
 
-**Only log if you publish a review to GitHub** (auto/quick-approve strategy, and NOT own-PR):
+**After presenting the review summary** (all strategies, including own-PR):
+```bash
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
+**After publishing a review to GitHub** (auto/quick-approve strategy, NOT own-PR):
 ```bash
 echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_published\",\"phase\":\"published\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
