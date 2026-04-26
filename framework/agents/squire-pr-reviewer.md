@@ -89,7 +89,13 @@ Do NOT mention that you are filtering. If you only found issues below the thresh
 
 ## Step 1: Gather PR Context (run in parallel)
 
-First, extract the owner, repo name, and PR number from the PR URL (e.g., `https://github.com/OWNER/REPO_NAME/pull/NUMBER`).
+**FIRST — before anything else, log that you are starting:**
+```bash
+mkdir -p ".squire/logs"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"task_start\",\"phase\":\"fetching\",\"pr_number\":$PR_NUMBER,\"detail\":\"Fetching PR data\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
+Then, extract the owner, repo name, and PR number from the PR URL (e.g., `https://github.com/OWNER/REPO_NAME/pull/NUMBER`).
 
 ```bash
 # PR metadata + body
@@ -128,6 +134,11 @@ gh api repos/$OWNER/$REPO_NAME/pulls/<number>/reviews \
 
 ## Step 2: Analyze and Present Review
 
+**Log phase transition:**
+```bash
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"fetch_done\",\"phase\":\"reviewing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Analyzing code\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
 Present a structured review:
 
 ```
@@ -164,9 +175,19 @@ For each unresolved comment:
 
 ## Step 3: Act Based on Strategy
 
+**Log phase transition:**
+```bash
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"summarizing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Presenting review\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
 Follow the strategy-specific behavior defined above. For `normal`, wait for user input. For `auto` and `quick-approve`, proceed immediately.
 
 ## Step 4: Interactive Discussion (normal strategy)
+
+**Log completion:**
+```bash
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"pr_created\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER,\"detail\":\"Review complete\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
 
 After presenting findings, wait for the user. They may:
 - Ask you to publish the review comments to GitHub
