@@ -82,7 +82,7 @@ export class TaskRunner {
 
     const terminalTitle = issueNum
       ? `Squire: Dev #${issueNum}`
-      : `Squire: adhoc-${Date.now()}`;
+      : `Squire: dev-adhoc-${Date.now()}`;
 
     const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
     const agentArgs: AgentLaunch = {
