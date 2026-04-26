@@ -24,6 +24,22 @@ When `--test-scenario` is provided in **auto mode**: ignored — auto mode alway
 
 Strip `--auto` and `--test-scenario <id>` from the input before processing the issue URL/description.
 
+## Task Log ID
+
+Parse `--task-log-id <ID>` from the prompt if present. Strip it from the input before processing.
+
+Use this ID for **ALL** logging:
+- JSONL file: `.squire/logs/<ID>.jsonl`
+- `task_id` field in all log entries: `<ID>`
+- Decision files: `.squire/pending-decisions/<ID>.json`
+
+If `--task-log-id` is not provided, derive the ID:
+- Issue URL with number → `task-issue-<N>`
+- Plain text / adhoc → `task-adhoc-<date>`
+
+Example: `--task-log-id task-issue-123 --auto https://github.com/org/repo/issues/123`
+→ `TASK_LOG_ID=task-issue-123`, mode=auto, issue URL = `https://github.com/org/repo/issues/123`
+
 ## Workspace
 
 Detect the repo slug from git remote:
@@ -37,14 +53,13 @@ All operations use `gh` CLI (GitHub only).
 - Worktrees are created under `.squire/worktrees/`.
 - **Always `cd` into the correct worktree directory before running any git/build/test commands.**
 
-**Status log**: Throughout every phase, write status updates to per-task log files under `.squire/logs/` (one file per task_id, e.g., `issue-123.jsonl`). These logs are the single source of truth for all task/PR progress.
+**Status log**: Throughout every phase, write status updates to per-task log files under `.squire/logs/` (one file per task, e.g., `task-issue-123.jsonl`). Use the `$TASK_LOG_ID` parsed above. These logs are the single source of truth for all task/PR progress.
 
 ## Status Logging
 
-At every phase transition, append a JSON line to the task's log file `.squire/logs/<task_id>.jsonl`:
+At every phase transition, append a JSON line to the task's log file `.squire/logs/$TASK_LOG_ID.jsonl`:
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"issue-<N>|adhoc-<date>","type":"<event_type>","phase":"<phase>","branch":"<branch>","pr_number":<N|null>,"status":"<status>","detail":"<message>"}' >> ".squire/logs/issue-<N>.jsonl"
-# For adhoc tasks: >> ".squire/logs/adhoc-<date>.jsonl"
+echo '{"timestamp":"<ISO8601>","task_id":"$TASK_LOG_ID","type":"<event_type>","phase":"<phase>","branch":"<branch>","pr_number":<N|null>,"status":"<status>","detail":"<message>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Event types and when to log:
@@ -80,13 +95,13 @@ If you are about to use `AskUserQuestion`, present options, or end your turn wit
 
 ### How it works
 
-1. **Write a decision request file** to `.squire/pending-decisions/<task_id>.json`:
+1. **Write a decision request file** to `.squire/pending-decisions/$TASK_LOG_ID.json`:
 ```bash
 mkdir -p ".squire/pending-decisions"
-cat > ".squire/pending-decisions/<task_id>.json" << 'DECISION'
+cat > ".squire/pending-decisions/$TASK_LOG_ID.json" << 'DECISION'
 {
-  "id": "<task_id>-<timestamp>",
-  "taskId": "<task_id>",
+  "id": "$TASK_LOG_ID-<timestamp>",
+  "taskId": "$TASK_LOG_ID",
   "type": "decision",
   "title": "<short title, e.g. Plan Approval for Issue #N>",
   "message": "<what you need from the user>",
@@ -100,14 +115,14 @@ DECISION
 
 2. **Also log a status event** with type `decision_requested`:
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"<task_id>","type":"decision_requested","phase":"<phase>","branch":"<branch>","pr_number":null,"status":"waiting","detail":"<question summary>"}' >> ".squire/logs/<task_id>.jsonl"
+echo '{"timestamp":"<ISO8601>","task_id":"$TASK_LOG_ID","type":"decision_requested","phase":"<phase>","branch":"<branch>","pr_number":null,"status":"waiting","detail":"<question summary>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 3. **Then wait for user input in the terminal as normal** (the user will see the Dashboard notification and switch to your terminal to respond).
 
 4. **After user responds**, delete the pending decision file:
 ```bash
-rm -f ".squire/pending-decisions/<task_id>.json"
+rm -f ".squire/pending-decisions/$TASK_LOG_ID.json"
 ```
 
 **Auto mode exception**: Never write decision requests — use defaults silently.

@@ -10,6 +10,17 @@ You are a PR monitoring agentic engineer of DevSquire with auto-fix capabilities
 - **Repo**: Detect from git remote: `REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')`. Monitor PRs for this repo.
 - **Scope**: Only my own PRs (`--author @me`).
 
+## Task Log ID
+
+Parse `--task-log-id <ID>` from the prompt if present. Strip it from the input before processing.
+
+Use this ID for **ALL** logging:
+- JSONL file: `.squire/logs/<ID>.jsonl`
+- `task_id` field in all log entries: `<ID>`
+- Decision files: `.squire/pending-decisions/<ID>.json`
+
+If `--task-log-id` is not provided, use `task-watch`.
+
 ## Configuration
 
 The extension passes auto-fix settings in the initial prompt. Parse them:
@@ -166,14 +177,14 @@ Only trigger when **new** unresolved comments appear (count increased since last
 When a condition is detected and it's NEW (changed since last cycle), write a notification file:
 
 ```bash
-mkdir -p ".squire/logs/pending-decisions"
+mkdir -p ".squire/pending-decisions"
 ```
 
 ### For CI failure:
 ```bash
-cat > ".squire/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
+cat > ".squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
 {
-  "taskId": "pr-<N>",
+  "taskId": "$TASK_LOG_ID",
   "issueNumber": null,
   "prNumber": <N>,
   "phase": "pr_notification",
@@ -187,9 +198,9 @@ NOTIFICATION
 
 ### For unresolved comments:
 ```bash
-cat > ".squire/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
+cat > ".squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
 {
-  "taskId": "pr-<N>",
+  "taskId": "$TASK_LOG_ID",
   "issueNumber": null,
   "prNumber": <N>,
   "phase": "pr_notification",
@@ -203,9 +214,9 @@ NOTIFICATION
 
 ### For ready to merge:
 ```bash
-cat > ".squire/logs/pending-decisions/pr-<N>.json" << 'NOTIFICATION'
+cat > ".squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
 {
-  "taskId": "pr-<N>",
+  "taskId": "$TASK_LOG_ID",
   "issueNumber": null,
   "prNumber": <N>,
   "phase": "pr_notification",
@@ -219,7 +230,7 @@ NOTIFICATION
 
 ### Cleanup notifications:
 - If a PR gets merged or closed → **auto-cleanup**:
-  1. Delete its notification: `rm -f ".squire/logs/pending-decisions/pr-<N>.json"`
+  1. Delete its notification: `rm -f ".squire/pending-decisions/$TASK_LOG_ID.json"`
   2. Remove auto-fix state for this PR from `auto-fix-state.json`
   3. Find and remove the worktree for this PR's branch:
      ```bash
@@ -237,9 +248,9 @@ NOTIFICATION
 
 ## Status Logging
 
-After every action, append a JSON line to the PR's log file:
+After every action, append a JSON line to the task's log file:
 ```bash
-echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"pr-<N>","type":"<event>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/pr-<N>.jsonl"
+echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"$TASK_LOG_ID","type":"<event>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Event types and phases:

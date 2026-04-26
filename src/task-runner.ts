@@ -11,6 +11,7 @@ export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' |
 
 export interface TaskInfo {
   id: string;
+  taskLogId?: string;
   type: TaskType;
   label: string;
   issueUrl?: string;
@@ -101,15 +102,18 @@ export class TaskRunner {
       initialPrompt: `${autoFlag}${issueUrl}`,
     };
 
+    const ts = Date.now();
+    const taskLogId = issueNum ? `task-issue-${issueNum}` : `task-adhoc-${ts}`;
     const taskInfo: TaskInfo = {
-      id: `dev-${Date.now()}`,
+      id: `dev-${ts}`,
+      taskLogId,
       type: 'dev-issue',
       label: this.formatDevLabel(effectiveMode, issueNum, issueTitle, issueInput),
       issueUrl,
       worktreeBranch: branchName,
       worktreeDir: wt?.path,
       status: 'running',
-      createdAt: Date.now(),
+      createdAt: ts,
     };
 
     const cwd = wt?.path || this.workspaceRoot;
@@ -119,12 +123,14 @@ export class TaskRunner {
 
   /** Run squire-watch-pr agent */
   async runWatchPRs(): Promise<TaskInfo> {
+    const ts = Date.now();
     const taskInfo: TaskInfo = {
-      id: `watch-${Date.now()}`,
+      id: `watch-${ts}`,
+      taskLogId: 'task-watch',
       type: 'watch-pr',
       label: 'Watch PRs',
       status: 'running',
-      createdAt: Date.now(),
+      createdAt: ts,
     };
 
     const autoFixCI = vscode.workspace.getConfiguration('devSquire').get('watchPR.autoFixCI', true);
@@ -170,18 +176,21 @@ export class TaskRunner {
       prompt += '\nIMPORTANT: This is the user\'s own PR. NEVER publish any comments, approvals, or reviews to GitHub. Present all findings locally only.';
     }
 
+    const ts = Date.now();
+    const taskLogId = `task-review-${prNumber || ts}`;
     const agentArgs: AgentLaunch = {
       agent: 'squire-pr-reviewer',
       initialPrompt: prompt,
     };
 
     const taskInfo: TaskInfo = {
-      id: `review-${Date.now()}`,
+      id: `review-${ts}`,
+      taskLogId,
       type: 'review-pr',
       label: `${strategySuffix} Review PR ${prLabel}${prTitle ? ' ' + prTitle : ''}`,
       prNumber,
       status: 'running',
-      createdAt: Date.now(),
+      createdAt: ts,
     };
 
     this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'code-review');
@@ -198,13 +207,15 @@ export class TaskRunner {
     };
     const terminalTitle = `Squire: Fix PR #${prNumber} comments`;
 
+    const ts = Date.now();
     const taskInfo: TaskInfo = {
-      id: `fix-${Date.now()}`,
+      id: `fix-${ts}`,
+      taskLogId: `task-issue-${prNumber}`,
       type: 'fix-comments',
       label: `Fix comments PR #${prNumber}`,
       prNumber,
       status: 'running',
-      createdAt: Date.now(),
+      createdAt: ts,
     };
 
     this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'wrench');
@@ -214,9 +225,11 @@ export class TaskRunner {
   /** Run an agent-based skill from the dashboard with user input */
   async runAgent(agentName: string, input: string): Promise<TaskInfo> {
     const isDevIssue = agentName === 'squire-dev-issue';
-    const adhocId = `dev-adhoc-${Date.now()}`;
+    const ts = Date.now();
+    const adhocId = `dev-adhoc-${ts}`;
+    const taskLogId = `task-adhoc-${ts}`;
     const terminalTitle = isDevIssue ? `Squire: ${adhocId}` : `Squire: ${agentName}`;
-    const taskId = isDevIssue ? adhocId : `agent-${Date.now()}`;
+    const taskId = isDevIssue ? adhocId : `agent-${ts}`;
     const taskType: TaskType = isDevIssue ? 'dev-issue' : 'run-agent';
 
     const agentArgs: AgentLaunch = {
@@ -226,10 +239,11 @@ export class TaskRunner {
 
     const taskInfo: TaskInfo = {
       id: taskId,
+      taskLogId,
       type: taskType,
       label: isDevIssue ? `[Auto] ${adhocId}` : `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
       status: 'running',
-      createdAt: Date.now(),
+      createdAt: ts,
     };
 
     this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, isDevIssue ? 'rocket' : 'squirrel');
@@ -238,7 +252,8 @@ export class TaskRunner {
 
   /** Run a custom command or prompt — matches dashboard run-command */
   async runCommand(command: string): Promise<TaskInfo> {
-    const adhocId = `dev-adhoc-${Date.now()}`;
+    const ts = Date.now();
+    const adhocId = `dev-adhoc-${ts}`;
     const isDevIssue = command.includes('squire-dev-issue');
     const isWatchPR = command.includes('squire-watch-pr');
     const label = command.startsWith('/')
@@ -249,12 +264,14 @@ export class TaskRunner {
       : command.startsWith('/') ? `Squire: ${command.split(' ')[0]}`
       : `Squire: ${adhocId}`;
 
+    const taskLogId = isWatchPR ? 'task-watch' : `task-adhoc-${ts}`;
     const taskInfo: TaskInfo = {
-      id: isWatchPR ? `watch-${Date.now()}` : adhocId,
+      id: isWatchPR ? `watch-${ts}` : adhocId,
+      taskLogId,
       type: isDevIssue ? 'dev-issue' : isWatchPR ? 'watch-pr' : 'run-command',
       label: isDevIssue ? `[Auto] ${adhocId}` : isWatchPR ? 'Watch PRs' : label,
       status: 'running',
-      createdAt: Date.now(),
+      createdAt: ts,
     };
 
     // Slash commands run interactively (not single-shot) so the AI can
@@ -416,8 +433,7 @@ export class TaskRunner {
 
     // Write per-task JSONL with worktree_dir so the dashboard can show the
     // Worktree button even after the extension reloads (issue #7).
-    const issueNum = taskInfo.issueUrl?.match(/\/issues\/(\d+)/)?.[1];
-    const taskLogId = issueNum ? `task-issue-${issueNum}` : `task-${taskInfo.id}`;
+    const taskLogId = taskInfo.taskLogId || `task-${taskInfo.id}`;
     this.squireDir.logJson(taskLogId, {
       event: 'task_start',
       phase: 'planned',
@@ -425,8 +441,9 @@ export class TaskRunner {
       type: taskInfo.type,
       label: taskInfo.label,
       branch: taskInfo.worktreeBranch,
-      issue_number: issueNum ? parseInt(issueNum) : undefined,
+      issue_number: taskInfo.issueUrl?.match(/\/issues\/(\d+)/)?.[1] ? parseInt(taskInfo.issueUrl.match(/\/issues\/(\d+)/)![1]) : undefined,
       issue_url: taskInfo.issueUrl,
+      pr_number: taskInfo.prNumber,
       worktree_dir: taskInfo.worktreeDir,
     });
 
@@ -437,6 +454,20 @@ export class TaskRunner {
     });
 
     terminal.show(false);
+
+    // Inject --task-log-id so agents write to the correct JSONL file
+    const logIdFlag = `--task-log-id ${taskLogId}`;
+    if (launch.agent && launch.initialPrompt) {
+      launch.initialPrompt = `${logIdFlag} ${launch.initialPrompt}`;
+    } else if (launch.agent) {
+      launch.initialPrompt = logIdFlag;
+    }
+    if (launch.interactivePrompt) {
+      launch.interactivePrompt = `${logIdFlag} ${launch.interactivePrompt}`;
+    }
+    if (launch.prompt) {
+      launch.prompt = `${logIdFlag} ${launch.prompt}`;
+    }
 
     if (launch.agent) {
       this.backend.launchAgent({ terminal, agentName: launch.agent, initialPrompt: launch.initialPrompt });

@@ -10,6 +10,16 @@ You are a code review agentic engineer of DevSquire. The user gives you a PR URL
 - The PR URL in the prompt tells you which repo to review. Extract the owner/repo from the URL.
 - Do NOT hardcode a repo — always derive it from the PR URL.
 
+## Task Log ID
+
+Parse `--task-log-id <ID>` from the prompt if present. Strip it from the input before processing.
+
+Use this ID for **ALL** logging:
+- JSONL file: `.squire/logs/<ID>.jsonl`
+- `task_id` field in all log entries: `<ID>`
+
+If `--task-log-id` is not provided, derive: `task-review-<N>` from the PR number.
+
 ## Workspace
 
 GitHub only. Use `gh` CLI for all PR operations. Extract repo from the PR URL.
@@ -250,9 +260,9 @@ When the user asks to fix a comment:
 
 ## Status Logging
 
-At every phase transition, append a JSON line to `.squire/logs/task-review-<N>.jsonl`:
+At every phase transition, append a JSON line to `.squire/logs/$TASK_LOG_ID.jsonl`:
 ```bash
-echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"task-review-<N>","type":"<event_type>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/task-review-<N>.jsonl"
+echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"$TASK_LOG_ID","type":"<event_type>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Log at these points:

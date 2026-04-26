@@ -265,8 +265,8 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     const merged = runtimeTasks.map((rt) => {
       const logTask = logTasks.find(
         (lt) => !claimedLogIds.has(lt.id) && (
-          lt.id === rt.id
-          || lt.id === `task-${rt.id}`
+          (rt.taskLogId && lt.id === rt.taskLogId)
+          || lt.id === rt.id
           || (rt.issueUrl && lt.issueUrl === rt.issueUrl)
           || (rt.worktreeBranch && lt.branch === rt.worktreeBranch)
         ),

@@ -121,7 +121,7 @@ export class TaskStateReader {
 
     const tasks: TaskState[] = [];
     const files = fs.readdirSync(logsDir).filter((f) =>
-      f.endsWith('.jsonl') && (f.startsWith('task-') || f.startsWith('issue-') || f.startsWith('adhoc-')),
+      f.endsWith('.jsonl') && f.startsWith('task-'),
     );
 
     for (const file of files) {
