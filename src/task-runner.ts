@@ -91,6 +91,7 @@ export class TaskRunner {
       for (const t of this.tasks.values()) {
         if (t.status === 'running' && t.issueUrl === issueUrl) {
           vscode.window.showWarningMessage(`DevSquire: Issue #${issueNum} already has a running task.`);
+          if (t.terminal) t.terminal.show();
           return t;
         }
       }
