@@ -55,28 +55,45 @@ All operations use `gh` CLI (GitHub only).
 
 **Status log**: Throughout every phase, write status updates to per-task log files under `.squire/logs/` (one file per task, e.g., `task-issue-123.jsonl`). Use the `$TASK_LOG_ID` parsed above. These logs are the single source of truth for all task/PR progress.
 
-## Status Logging
+## Status Logging — MANDATORY
 
-At every phase transition, append a JSON line to the task's log file `.squire/logs/$TASK_LOG_ID.jsonl`:
+**You MUST run an echo command at every phase transition listed below. This is not optional. The dashboard depends on these logs to show progress. If you skip logging, the user sees a stuck task.**
+
+Log file: `.squire/logs/$TASK_LOG_ID.jsonl` — replace `$TASK_LOG_ID` with the actual value parsed from `[task-log-id:...]`.
+
+**Run the first log IMMEDIATELY when you start, before any other work:**
 ```bash
-echo '{"timestamp":"<ISO8601>","task_id":"$TASK_LOG_ID","type":"<event_type>","phase":"<phase>","branch":"<branch>","pr_number":<N|null>,"status":"<status>","detail":"<message>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"task_start\",\"phase\":\"analyzing\",\"branch\":\"$BRANCH\",\"detail\":\"Starting issue analysis\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
-Event types and when to log:
-| Event | When |
-|-------|------|
-| `task_start` | Phase 0 — branch created |
-| `analysis_done` | Phase 1 — issue understood |
-| `exploration_done` | Phase 2 — code explored |
-| `plan_approved` | Phase 3 — user approved plan, test strategy chosen |
-| `implementation_done` | Phase 4 — code written |
-| `test_pass` | Phase 5 — tests passed |
-| `test_fail` | Phase 5 — tests failed (include error summary in detail) |
-| `manual_verify_waiting` | Phase 5 strategy 3 — waiting for user manual verify |
-| `manual_verify_done` | Phase 5 strategy 3 — user confirmed ok |
-| `pr_created` | Phase 6 — PR opened (include pr_number) |
-| `skill_captured` | Phase 7 — knowledge saved |
-| `blocked` | Any phase — needs human intervention (include reason in detail) |
+Then log at each subsequent transition:
+```bash
+# Phase 1 done — issue understood:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"analysis_done\",\"phase\":\"exploring\",\"branch\":\"$BRANCH\",\"detail\":\"Issue analyzed\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Phase 2 done — code explored:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"exploration_done\",\"phase\":\"planning\",\"branch\":\"$BRANCH\",\"detail\":\"Code explored\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Phase 3 done — plan approved:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"plan_approved\",\"phase\":\"implementing\",\"branch\":\"$BRANCH\",\"detail\":\"Plan approved\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Phase 4 done — code written:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"implementation_done\",\"phase\":\"testing\",\"branch\":\"$BRANCH\",\"detail\":\"Implementation complete\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Phase 5 — tests passed:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"test_pass\",\"phase\":\"creating_pr\",\"branch\":\"$BRANCH\",\"detail\":\"Tests passed\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Phase 5 — tests failed:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"test_fail\",\"phase\":\"testing\",\"branch\":\"$BRANCH\",\"detail\":\"<error summary>\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Phase 6 — PR created:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"pr_created\",\"phase\":\"done\",\"branch\":\"$BRANCH\",\"pr_number\":$PR_NUM,\"detail\":\"PR created\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# Blocked:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"blocked\",\"phase\":\"failed\",\"branch\":\"$BRANCH\",\"detail\":\"<reason>\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
+Replace `$TASK_LOG_ID`, `$BRANCH`, `$PR_NUM` with actual values. **Do not skip any of these logs.**
 
 ## Decision Notifications
 

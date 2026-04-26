@@ -258,18 +258,27 @@ When the user asks to fix a comment:
 5. **Be concise** — no boilerplate, no filler
 6. **If the prompt says "NEVER publish"** — obey unconditionally, regardless of strategy
 
-## Status Logging
+## Status Logging — MANDATORY
 
-At every phase transition, append a JSON line to `.squire/logs/$TASK_LOG_ID.jsonl`:
+**You MUST run these echo commands at every phase transition. This is not optional. The dashboard depends on these logs to show progress.**
+
+Log file path: `.squire/logs/$TASK_LOG_ID.jsonl` (where `$TASK_LOG_ID` is the value you parsed from `[task-log-id:...]`).
+
+**Run this FIRST, before doing anything else in Step 1:**
 ```bash
-echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"$TASK_LOG_ID","type":"<event_type>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"task_start\",\"phase\":\"fetching\",\"pr_number\":$PR_NUMBER,\"detail\":\"Fetching PR data\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
-Log at these points:
-| Event type | Phase | When |
-|-----------|-------|------|
-| `task_start` | `fetching` | Start of Step 1 — about to fetch PR data |
-| `fetch_done` | `reviewing` | PR data fetched, starting analysis |
-| `review_done` | `summarizing` | Analysis complete, presenting/publishing results |
-| `pr_created` | `done` | Review posted or presented to user |
-| `blocked` | `failed` | Unable to complete review |
+Then log at each subsequent transition:
+```bash
+# After PR data fetched, starting analysis:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"fetch_done\",\"phase\":\"reviewing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Analyzing code\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# After analysis complete, presenting results:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"summarizing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Presenting review\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+
+# After review posted or presented:
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"pr_created\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER,\"detail\":\"Review complete\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
+Replace `$TASK_LOG_ID` and `$PR_NUMBER` with actual values. **Do not skip any of these logs.**
