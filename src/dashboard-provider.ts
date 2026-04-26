@@ -36,7 +36,8 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.extensionUri],
     };
 
-    webviewView.webview.html = getDashboardHtml(this.repoInfo);
+    const defaultMode = vscode.workspace.getConfiguration('devSquire').get<string>('devIssue.mode', 'auto');
+    webviewView.webview.html = getDashboardHtml(this.repoInfo, defaultMode);
 
     webviewView.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
   }
