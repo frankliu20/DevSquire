@@ -6,7 +6,34 @@ export type TaskPhase =
   | 'planned' | 'analyzing' | 'exploring' | 'planning'
   | 'implementing' | 'testing' | 'test_failed'
   | 'waiting_confirm' | 'waiting_manual_test'
-  | 'creating_pr' | 'done' | 'failed';
+  | 'creating_pr' | 'done' | 'failed'
+  // review-pr phases
+  | 'fetching' | 'reviewing' | 'summarizing'
+  // watch-pr phases
+  | 'monitoring' | 'fixing_ci' | 'fixing_comments';
+
+/** Pipeline phases displayed in the dashboard, per task type */
+export const PHASE_PIPELINES: Record<string, TaskPhase[]> = {
+  'dev-issue':    ['analyzing', 'exploring', 'planning', 'implementing', 'testing', 'creating_pr', 'done'],
+  'review-pr':    ['fetching', 'reviewing', 'summarizing', 'done'],
+  'watch-pr':     ['analyzing', 'monitoring', 'fixing_ci', 'fixing_comments', 'monitoring'],
+  'fix-comments': ['analyzing', 'implementing', 'testing', 'creating_pr', 'done'],
+  'run-command':  ['implementing', 'done'],
+};
+
+/** Task types that have a cyclic (non-linear) pipeline — only highlight current step, don't mark previous as done */
+export const CYCLIC_PIPELINES = new Set(['watch-pr']);
+
+/** Default fallback phase for a running task of the given type */
+export function defaultRunningPhase(taskType: string): TaskPhase {
+  switch (taskType) {
+    case 'review-pr':    return 'fetching';
+    case 'watch-pr':     return 'monitoring';
+    case 'fix-comments': return 'implementing';
+    case 'run-command':  return 'implementing';
+    default:             return 'implementing';
+  }
+}
 
 /** Derived from JSONL log entries */
 export interface TaskState {
@@ -66,6 +93,19 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   skill_captured: 'done',
   pr_merged: 'done',
   worktree_cleaned: 'done',
+  // review-pr events
+  fetch_done: 'reviewing',
+  review_done: 'summarizing',
+  // watch-pr events
+  check_cycle: 'monitoring',
+  ci_failure: 'fixing_ci',
+  ci_auto_fix: 'fixing_ci',
+  ci_auto_fix_failed: 'fixing_ci',
+  review_comments: 'fixing_comments',
+  comment_auto_fix: 'fixing_comments',
+  comment_auto_fix_failed: 'fixing_comments',
+  ready_to_merge: 'monitoring',
+  auto_fix_blocked: 'failed',
 };
 
 /**

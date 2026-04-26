@@ -247,3 +247,19 @@ When the user asks to fix a comment:
 4. **Strategy: normal → NEVER publish without explicit user confirmation**
 5. **Be concise** — no boilerplate, no filler
 6. **If the prompt says "NEVER publish"** — obey unconditionally, regardless of strategy
+
+## Status Logging
+
+At every phase transition, append a JSON line to `.squire/logs/task-review-<N>.jsonl`:
+```bash
+echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"task-review-<N>","type":"<event_type>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> ".squire/logs/task-review-<N>.jsonl"
+```
+
+Log at these points:
+| Event type | Phase | When |
+|-----------|-------|------|
+| `task_start` | `fetching` | Start of Step 1 — about to fetch PR data |
+| `fetch_done` | `reviewing` | PR data fetched, starting analysis |
+| `review_done` | `summarizing` | Analysis complete, presenting/publishing results |
+| `pr_created` | `done` | Review posted or presented to user |
+| `blocked` | `failed` | Unable to complete review |

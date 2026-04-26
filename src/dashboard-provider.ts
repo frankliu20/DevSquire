@@ -5,7 +5,7 @@ import { TaskRunner } from './task-runner';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
 import { GitHubData } from './github-data';
-import { TaskStateReader } from './task-state';
+import { TaskStateReader, defaultRunningPhase } from './task-state';
 import { SkillsReader } from './skills-reader';
 import { ReportGenerator } from './report';
 import { getDashboardHtml } from './dashboard-html';
@@ -271,7 +271,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         ),
       );
       if (logTask) claimedLogIds.add(logTask.id);
-      const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? 'implementing' : 'planned');
+      const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? defaultRunningPhase(rt.type) : 'planned');
       const isWaiting = waitingTaskIds.has(rt.id) || waitingTaskIds.has(logTask?.id || '');
       return {
         id: rt.id,

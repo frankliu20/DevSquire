@@ -213,39 +213,46 @@ export class TaskRunner {
 
   /** Run an agent-based skill from the dashboard with user input */
   async runAgent(agentName: string, input: string): Promise<TaskInfo> {
-    const terminalTitle = `Squire: ${agentName}`;
+    const isDevIssue = agentName === 'squire-dev-issue';
+    const adhocId = `dev-adhoc-${Date.now()}`;
+    const terminalTitle = isDevIssue ? `Squire: ${adhocId}` : `Squire: ${agentName}`;
+    const taskId = isDevIssue ? adhocId : `agent-${Date.now()}`;
+    const taskType: TaskType = isDevIssue ? 'dev-issue' : 'run-agent';
 
     const agentArgs: AgentLaunch = {
       agent: agentName,
-      initialPrompt: input,
+      initialPrompt: input || undefined,
     };
 
     const taskInfo: TaskInfo = {
-      id: `agent-${Date.now()}`,
-      type: 'run-agent',
-      label: `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
+      id: taskId,
+      type: taskType,
+      label: isDevIssue ? `[Auto] ${adhocId}` : `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
       status: 'running',
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'squirrel');
+    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, isDevIssue ? 'rocket' : 'squirrel');
     return taskInfo;
   }
 
   /** Run a custom command or prompt — matches dashboard run-command */
   async runCommand(command: string): Promise<TaskInfo> {
     const adhocId = `dev-adhoc-${Date.now()}`;
+    const isDevIssue = command.includes('squire-dev-issue');
+    const isWatchPR = command.includes('squire-watch-pr');
     const label = command.startsWith('/')
       ? command.split(' ')[0]
       : command.substring(0, 40) + (command.length > 40 ? '…' : '');
-    const terminalTitle = command.startsWith('/')
-      ? `Squire: ${command.split(' ')[0]}`
+    const terminalTitle = isDevIssue ? `Squire: ${adhocId}`
+      : isWatchPR ? 'Squire: Watch PRs'
+      : command.startsWith('/') ? `Squire: ${command.split(' ')[0]}`
       : `Squire: ${adhocId}`;
 
     const taskInfo: TaskInfo = {
-      id: adhocId,
-      type: 'run-command',
-      label,
+      id: isWatchPR ? `watch-${Date.now()}` : adhocId,
+      type: isDevIssue ? 'dev-issue' : isWatchPR ? 'watch-pr' : 'run-command',
+      label: isDevIssue ? `[Auto] ${adhocId}` : isWatchPR ? 'Watch PRs' : label,
       status: 'running',
       createdAt: Date.now(),
     };
