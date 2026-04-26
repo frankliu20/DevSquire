@@ -50,22 +50,22 @@
 ### Dashboard — Issue Management
 Browse and develop GitHub issues directly from the dashboard.
 
-![Dashboard Issues](docs/screenshots/dashboard-issues.png)
+<img src="docs/screenshots/dashboard-issues.png" width="100%" />
 
 ### Task Pipeline — Real-Time Progress
 Every task shows a live progress pipeline. Dev issues go through 7 stages; PR reviews through 3.
 
-![Tasks Pipeline](docs/screenshots/tasks-pipeline.png)
+<img src="docs/screenshots/tasks-pipeline.png" width="100%" />
 
 ### Agent at Work — Terminal Integration
 Tasks run in VS Code terminals. Click **Terminal** to see the AI agent working in real time.
 
-![Tasks Terminal](docs/screenshots/tasks-terminal.png)
+<img src="docs/screenshots/tasks-terminal.png" width="100%" />
 
 ### End-of-Day Report
 Generate a daily scrum summary with one click.
 
-![Report](docs/screenshots/report.png)
+<img src="docs/screenshots/report.png" width="100%" />
 
 ## Quick Start
 
@@ -90,12 +90,12 @@ code --install-extension frankliu20.devsquire-vscode
 
 ```
 GitHub Issue ──► DevSquire Dashboard ──► AI Agent in Terminal
-                        │                          │
-                        │  real-time progress       │  autonomous pipeline
-                        │  pipeline tracking        │  analyze → plan → code → test
-                        │                          │
-                        ▼                          ▼
-                 Tasks Tab (live)            Pull Request Created
+                        │                        │
+                        │  real-time progress     │  autonomous pipeline
+                        │  pipeline tracking      │  analyze → plan → code → test
+                        │                        │
+                        ▼                        ▼
+                 Tasks Tab (live)          Pull Request Created
 ```
 
 **Task Pipelines:**
