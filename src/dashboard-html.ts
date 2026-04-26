@@ -879,7 +879,12 @@ function isRunnableAgent(name) {
   return runnable.indexOf(name) !== -1;
 }
 function promptRunAgent(name) {
-  var placeholder = name === 'squire-dev-issue' ? 'Enter issue URL or description' : 'Enter PR URL (e.g. https://github.com/org/repo/pull/123)';
+  if (name === 'squire-watch-pr') {
+    vscode.postMessage({ type: 'watchPRs' });
+    toast('Launching Watch PRs...', 'info');
+    return;
+  }
+  var placeholder = name === 'squire-dev-issue' ? 'Enter issue URL or description' : 'Enter input for ' + name;
   var input = prompt(placeholder);
   if (input !== null && input.trim()) {
     vscode.postMessage({ type: 'runAgent', agent: name, input: input.trim() });
