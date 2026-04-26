@@ -227,7 +227,9 @@ export class TaskRunner {
     const label = command.startsWith('/')
       ? command.split(' ')[0]
       : command.substring(0, 40) + (command.length > 40 ? '…' : '');
-    const terminalTitle = `Squire: ${adhocId}`;
+    const terminalTitle = command.startsWith('/')
+      ? `Squire: ${command.split(' ')[0]}`
+      : `Squire: ${adhocId}`;
 
     const taskInfo: TaskInfo = {
       id: adhocId,

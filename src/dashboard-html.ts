@@ -896,7 +896,10 @@ function toggleSkill(name) {
     el.style.display = el.id === 'skill-' + name && expandedSkill === name ? 'block' : 'none';
   });
 }
-function runSkill(name) { vscode.postMessage({ type: 'runCommand', command: '/' + name }); toast('Running /' + name, 'info'); }
+function runSkill(name) {
+  if (isRunnableAgent(name)) { promptRunAgent(name); return; }
+  vscode.postMessage({ type: 'runCommand', command: '/' + name }); toast('Running /' + name, 'info');
+}
 function isRunnableAgent(name) {
   var runnable = ['squire-dev-issue', 'squire-watch-pr'];
   return runnable.indexOf(name) !== -1;
