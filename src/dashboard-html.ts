@@ -814,13 +814,13 @@ function badgeFor(action) {
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
 const PHASES = ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'];
-const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done', fetching: 'Fetch', reviewing: 'Review', summarizing: 'Summary', monitoring: 'Monitor', fixing_ci: 'Fix CI', fixing_comments: 'Fix Comments' };
+const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done', reviewing: 'Reviewing', published: 'Published', monitoring: 'Monitor', fixing_ci: 'Fix CI', fixing_comments: 'Fix Comments' };
 // Map internal phases to pipeline display phases
-const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed', fetching: 'fetching', reviewing: 'reviewing', summarizing: 'summarizing', monitoring: 'monitoring', fixing_ci: 'fixing_ci', fixing_comments: 'fixing_comments' };
+const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed', reviewing: 'reviewing', published: 'published', monitoring: 'monitoring', fixing_ci: 'fixing_ci', fixing_comments: 'fixing_comments' };
 // Per-type pipeline phases
 const PHASE_PIPELINES = {
   'dev-issue':    ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'],
-  'review-pr':    ['fetching','reviewing','summarizing','done'],
+  'review-pr':    ['reviewing','done'],
   'watch-pr':     ['analyzing','monitoring','fixing_ci','fixing_comments','monitoring'],
   'fix-comments': ['analyzing','implementing','testing','creating_pr','done'],
   'run-command':  ['implementing','done'],

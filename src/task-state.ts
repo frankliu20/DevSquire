@@ -8,14 +8,14 @@ export type TaskPhase =
   | 'waiting_confirm' | 'waiting_manual_test'
   | 'creating_pr' | 'done' | 'failed'
   // review-pr phases
-  | 'fetching' | 'reviewing' | 'summarizing'
+  | 'reviewing' | 'published'
   // watch-pr phases
   | 'monitoring' | 'fixing_ci' | 'fixing_comments';
 
 /** Pipeline phases displayed in the dashboard, per task type */
 export const PHASE_PIPELINES: Record<string, TaskPhase[]> = {
   'dev-issue':    ['analyzing', 'exploring', 'planning', 'implementing', 'testing', 'creating_pr', 'done'],
-  'review-pr':    ['fetching', 'reviewing', 'summarizing', 'done'],
+  'review-pr':    ['reviewing', 'done'],
   'watch-pr':     ['analyzing', 'monitoring', 'fixing_ci', 'fixing_comments', 'monitoring'],
   'fix-comments': ['analyzing', 'implementing', 'testing', 'creating_pr', 'done'],
   'run-command':  ['implementing', 'done'],
@@ -27,7 +27,7 @@ export const CYCLIC_PIPELINES = new Set(['watch-pr']);
 /** Default fallback phase for a running task of the given type */
 export function defaultRunningPhase(taskType: string): TaskPhase {
   switch (taskType) {
-    case 'review-pr':    return 'fetching';
+    case 'review-pr':    return 'reviewing';
     case 'watch-pr':     return 'monitoring';
     case 'fix-comments': return 'implementing';
     case 'run-command':  return 'implementing';
@@ -94,8 +94,7 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   pr_merged: 'done',
   worktree_cleaned: 'done',
   // review-pr events
-  fetch_done: 'reviewing',
-  review_done: 'summarizing',
+  review_published: 'published',
   // watch-pr events
   check_cycle: 'monitoring',
   ci_failure: 'fixing_ci',
@@ -114,7 +113,7 @@ const VALID_PHASES = new Set<string>([
   'implementing', 'testing', 'test_failed',
   'waiting_confirm', 'waiting_manual_test',
   'creating_pr', 'done', 'failed',
-  'fetching', 'reviewing', 'summarizing',
+  'reviewing', 'published',
   'monitoring', 'fixing_ci', 'fixing_comments',
 ]);
 

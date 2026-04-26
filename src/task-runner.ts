@@ -54,6 +54,14 @@ export class TaskRunner {
       for (const task of this.tasks.values()) {
         if (task.terminal === closedTerminal) {
           task.status = 'completed';
+          // Write done event to JSONL so dashboard shows completion
+          const taskLogId = task.taskLogId || `task-${task.id}`;
+          this.squireDir.logJson(taskLogId, {
+            event: 'task_completed',
+            phase: 'done',
+            task_id: taskLogId,
+            type: task.type,
+          });
           task.terminal = undefined;
           this._onTasksChanged.fire();
           this.squireDir.log('extension', `Task ${task.id} (${task.label}) terminal closed`);
@@ -434,9 +442,10 @@ export class TaskRunner {
     // Write per-task JSONL with worktree_dir so the dashboard can show the
     // Worktree button even after the extension reloads (issue #7).
     const taskLogId = taskInfo.taskLogId || `task-${taskInfo.id}`;
+    const initialPhase = taskInfo.type === 'review-pr' ? 'reviewing' : 'planned';
     this.squireDir.logJson(taskLogId, {
       event: 'task_start',
-      phase: 'planned',
+      phase: initialPhase,
       task_id: taskLogId,
       type: taskInfo.type,
       label: taskInfo.label,

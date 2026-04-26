@@ -89,13 +89,7 @@ Do NOT mention that you are filtering. If you only found issues below the thresh
 
 ## Step 1: Gather PR Context (run in parallel)
 
-**FIRST — before anything else, log that you are starting:**
-```bash
-mkdir -p ".squire/logs"
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"task_start\",\"phase\":\"fetching\",\"pr_number\":$PR_NUMBER,\"detail\":\"Fetching PR data\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-```
-
-Then, extract the owner, repo name, and PR number from the PR URL (e.g., `https://github.com/OWNER/REPO_NAME/pull/NUMBER`).
+First, extract the owner, repo name, and PR number from the PR URL (e.g., `https://github.com/OWNER/REPO_NAME/pull/NUMBER`).
 
 ```bash
 # PR metadata + body
@@ -134,11 +128,6 @@ gh api repos/$OWNER/$REPO_NAME/pulls/<number>/reviews \
 
 ## Step 2: Analyze and Present Review
 
-**Log phase transition:**
-```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"fetch_done\",\"phase\":\"reviewing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Analyzing code\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-```
-
 Present a structured review:
 
 ```
@@ -175,19 +164,9 @@ For each unresolved comment:
 
 ## Step 3: Act Based on Strategy
 
-**Log phase transition:**
-```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"summarizing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Presenting review\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-```
-
 Follow the strategy-specific behavior defined above. For `normal`, wait for user input. For `auto` and `quick-approve`, proceed immediately.
 
 ## Step 4: Interactive Discussion (normal strategy)
-
-**Log completion:**
-```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"pr_created\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER,\"detail\":\"Review complete\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-```
 
 After presenting findings, wait for the user. They may:
 - Ask you to publish the review comments to GitHub
@@ -279,27 +258,13 @@ When the user asks to fix a comment:
 5. **Be concise** — no boilerplate, no filler
 6. **If the prompt says "NEVER publish"** — obey unconditionally, regardless of strategy
 
-## Status Logging — MANDATORY
+## Status Logging
 
-**You MUST run these echo commands at every phase transition. This is not optional. The dashboard depends on these logs to show progress.**
+The extension handles `reviewing` and `done` phases automatically. You do NOT need to log those.
 
-Log file path: `.squire/logs/$TASK_LOG_ID.jsonl` (where `$TASK_LOG_ID` is the value you parsed from `[task-log-id:...]`).
-
-**Run this FIRST, before doing anything else in Step 1:**
+**Only log if you publish a review to GitHub** (auto/quick-approve strategy, and NOT own-PR):
 ```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"task_start\",\"phase\":\"fetching\",\"pr_number\":$PR_NUMBER,\"detail\":\"Fetching PR data\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_published\",\"phase\":\"published\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
-Then log at each subsequent transition:
-```bash
-# After PR data fetched, starting analysis:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"fetch_done\",\"phase\":\"reviewing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Analyzing code\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-
-# After analysis complete, presenting results:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"summarizing\",\"pr_number\":$PR_NUMBER,\"detail\":\"Presenting review\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-
-# After review posted or presented:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"pr_created\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER,\"detail\":\"Review complete\"}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-```
-
-Replace `$TASK_LOG_ID` and `$PR_NUMBER` with actual values. **Do not skip any of these logs.**
+Replace `$TASK_LOG_ID` and `$PR_NUMBER` with actual values.
