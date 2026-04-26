@@ -861,6 +861,7 @@ function renderSkills() {
       <div class="skill-desc">\${esc(s.description)}</div>
       <div class="skill-content" id="skill-\${esc(s.name)}">\${esc(s.content)}</div>
       \${s.type === 'command' ? '<button class="btn-s mt8" onclick="event.stopPropagation();runSkill(\\''+esc(s.name)+'\\')">Run</button>' : ''}
+      \${s.type === 'agent' && isRunnableAgent(s.name) ? '<button class="btn-s mt8" onclick="event.stopPropagation();promptRunAgent(\\''+esc(s.name)+'\\')">Run</button>' : ''}
     </div>\`).join('');
 }
 function toggleSkill(name) {
@@ -870,6 +871,18 @@ function toggleSkill(name) {
   });
 }
 function runSkill(name) { vscode.postMessage({ type: 'runCommand', command: '/' + name }); toast('Running /' + name, 'info'); }
+function isRunnableAgent(name) {
+  var runnable = ['squire-dev-issue', 'squire-watch-pr'];
+  return runnable.indexOf(name) !== -1;
+}
+function promptRunAgent(name) {
+  var placeholder = name === 'squire-dev-issue' ? 'Enter issue URL or description' : 'Enter PR URL (e.g. https://github.com/org/repo/pull/123)';
+  var input = prompt(placeholder);
+  if (input !== null && input.trim()) {
+    vscode.postMessage({ type: 'runAgent', agent: name, input: input.trim() });
+    toast('Launching ' + name + '...', 'info');
+  }
+}
 
 // ===== Report =====
 function switchReportView(v) {
