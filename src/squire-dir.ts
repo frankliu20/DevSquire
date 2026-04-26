@@ -25,6 +25,7 @@ export class SquireDir {
         fs.mkdirSync(dir, { recursive: true });
       }
     }
+    this.ensureConfig();
   }
 
   /** Add .squire/ to .gitignore if not already there */
@@ -46,9 +47,11 @@ export class SquireDir {
     }
   }
 
-  /** Append a log entry */
+  /** Append a log entry. 'extension' category writes to .squire/extension.log (outside logs/) */
   log(category: string, message: string): void {
-    const logFile = path.join(this.logsDir, `${category}.log`);
+    const logFile = category === 'extension'
+      ? path.join(this.dir, 'extension.log')
+      : path.join(this.logsDir, `${category}.log`);
     const timestamp = new Date().toISOString();
     const line = `[${timestamp}] ${message}\n`;
     try {
@@ -86,6 +89,44 @@ export class SquireDir {
       fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
     } catch {
       // Non-critical
+    }
+  }
+
+  /** Generate config.yaml with commented-out defaults if it doesn't exist */
+  private ensureConfig(): void {
+    const configPath = path.join(this.dir, 'config.yaml');
+    if (fs.existsSync(configPath)) return;
+
+    const template = `# DevSquire project configuration
+# Uncomment and customize the sections below as needed.
+
+# build:
+#   command: npm run build
+#   test_command: npx jest --testPathPattern={{file}} --no-coverage
+#   test_all_command: npx jest --coverage
+#   lint_command: npx eslint .
+#   default_branch: main
+
+# test_runner_skill: my-test-runner   # Custom test runner skill in ~/.claude/skills/
+`;
+
+    try {
+      fs.writeFileSync(configPath, template, 'utf-8');
+    } catch {
+      // Non-critical
+    }
+  }
+
+  /** Remove logs, pending-decisions, and worktrees dirs, then recreate them */
+  cleanDirs(): void {
+    const worktreesDir = path.join(this.dir, 'worktrees');
+    for (const dir of [this.logsDir, this.decisionsDir, worktreesDir]) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {
+        // Non-critical
+      }
     }
   }
 }

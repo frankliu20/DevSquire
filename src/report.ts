@@ -1,7 +1,7 @@
 import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { GitHubData } from './github-data';
+import { GitHubData, GitHubCommit } from './github-data';
 
 export interface EODReport {
   issuesClosed: number;
@@ -86,16 +86,46 @@ export class ReportGenerator {
   /** Generate scrum report */
   generateScrum(): ScrumReport {
     const since = this.getLastScrumMark();
-    // For now, derive from issues + tasks
     const myIssues = this.ghData.listMyIssues();
 
-    // Done = issues that have a merged PR since last scrum
-    // Ongoing = issues still open
-    // Blockers = issues with 'blocked' label
     const done: ScrumReport['done'] = [];
     const ongoing: ScrumReport['ongoing'] = [];
     const blockers: ScrumReport['blockers'] = [];
 
+    // Done = issues closed since last scrum
+    try {
+      const output = cp.execSync(
+        `gh issue list --repo ${this.slug} --state closed --assignee @me --json number,title,closedAt --limit 30`,
+        { encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+      const raw = JSON.parse(output);
+      const sinceDate = new Date(since).getTime();
+      for (const i of raw) {
+        if (i.closedAt && new Date(i.closedAt).getTime() >= sinceDate) {
+          done.push({ number: i.number, title: i.title });
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Also add merged PRs since last scrum as done items
+    try {
+      const output = cp.execSync(
+        `gh pr list --repo ${this.slug} --state merged --author @me --json number,title,mergedAt --limit 20`,
+        { encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+      const raw = JSON.parse(output);
+      const sinceDate = new Date(since).getTime();
+      for (const p of raw) {
+        if (p.mergedAt && new Date(p.mergedAt).getTime() >= sinceDate) {
+          // Only add if not already in done (by number collision with issue)
+          if (!done.find((d) => d.number === p.number)) {
+            done.push({ number: p.number, title: p.title, prUrl: `https://github.com/${this.slug}/pull/${p.number}` });
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Ongoing & Blockers from open issues
     for (const issue of myIssues) {
       if (issue.labels.some((l) => l.toLowerCase().includes('block'))) {
         blockers.push({ number: issue.number, title: issue.title, reason: 'Blocked label' });

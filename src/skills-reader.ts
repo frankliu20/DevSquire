@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as vscode from 'vscode';
+import { SquireBackend } from './backend';
 
 export interface SkillInfo {
   name: string;
@@ -16,28 +16,17 @@ export interface SkillInfo {
  * Lists installed skills, agents, and commands.
  */
 export class SkillsReader {
-  /** Read all installed skills from the configured location */
-  readAll(): SkillInfo[] {
-    const location = vscode.workspace.getConfiguration('devSquire').get<string>('frameworkLocation', 'home');
+  constructor(private backend: SquireBackend) {}
+
+  /** Read all installed skills from the configured backend dirs */
+  readAll(workspaceRoot: string): SkillInfo[] {
     const results: SkillInfo[] = [];
+    const dirs = this.backend.getSkillScanDirs(workspaceRoot);
 
-    if (location === 'project') {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (workspaceRoot) {
-        results.push(...this.readDir(path.join(workspaceRoot, '.github', 'copilot', 'commands'), 'command'));
-        results.push(...this.readDir(path.join(workspaceRoot, '.github', 'copilot', 'agents'), 'agent'));
-      }
+    for (const dir of dirs) {
+      const type = dir.includes('agents') ? 'agent' : dir.includes('skills') ? 'skill' : 'command';
+      results.push(...this.readDir(dir, type));
     }
-
-    // Always also read from home dir
-    const copilotDir = path.join(os.homedir(), '.copilot');
-    results.push(...this.readDir(path.join(copilotDir, 'commands'), 'command'));
-    results.push(...this.readDir(path.join(copilotDir, 'agents'), 'agent'));
-
-    // Also check ~/.claude/ for skills
-    const claudeDir = path.join(os.homedir(), '.claude');
-    results.push(...this.readDir(path.join(claudeDir, 'commands'), 'command'));
-    results.push(...this.readDir(path.join(claudeDir, 'agents'), 'agent'));
 
     // Dedupe by name
     const seen = new Set<string>();

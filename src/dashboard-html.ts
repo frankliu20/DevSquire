@@ -60,7 +60,7 @@ export function getDashboardHtml(repoInfo: GitHubRepoInfo): string {
   /* Typography */
   --font: var(--vscode-font-family);
   --font-mono: var(--vscode-editor-font-family);
-  --text-xs: 11px; --text-sm: 12px; --text-base: 13px; --text-lg: 14px; --text-xl: 16px;
+  --text-xs: calc(var(--vscode-font-size, 16px) * 0.88); --text-sm: var(--vscode-font-size, 16px); --text-base: calc(var(--vscode-font-size, 16px) * 1.06); --text-lg: calc(var(--vscode-font-size, 16px) * 1.13); --text-xl: calc(var(--vscode-font-size, 16px) * 1.25);
 }
 
 /* ===== Reset ===== */
@@ -104,6 +104,10 @@ body {
   background: var(--bg-surface);
 }
 .stat-card:hover { background: var(--input-bg); border-color: var(--focus); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.stat-issues { border-left: 3px solid var(--blue); }
+.stat-prs { border-left: 3px solid var(--purple); }
+.stat-tasks { border-left: 3px solid var(--yellow); }
+.stat-actions { border-left: 3px solid var(--green); }
 .stat-num { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .stat-label { font-size: var(--text-xs); color: var(--fg-muted); margin-top: 2px; }
 
@@ -113,7 +117,8 @@ body {
   background: var(--bg-subtle); padding: 0 var(--sp-2);
 }
 .tab {
-  padding: var(--sp-2) var(--sp-3); font-size: var(--text-sm); cursor: pointer;
+  flex: 1; text-align: center;
+  padding: var(--sp-2) var(--sp-1); font-size: var(--text-sm); cursor: pointer;
   border: none; background: none; color: var(--fg-muted);
   border-bottom: 2px solid transparent; white-space: nowrap;
   transition: all var(--t-fast); position: relative;
@@ -145,11 +150,11 @@ button {
   padding: var(--sp-1) var(--sp-3); border: none; border-radius: var(--r-sm);
   cursor: pointer; background: var(--btn-bg); color: var(--btn-fg);
   font-size: var(--text-sm); font-family: var(--font); transition: all var(--t-fast);
-  line-height: 1.4;
+  line-height: 1.4; min-height: 28px;
 }
 button:hover { background: var(--btn-hover); }
 button:active { transform: scale(0.97); }
-.btn-s { padding: 2px var(--sp-2); font-size: var(--text-xs); }
+.btn-s { padding: var(--sp-1) var(--sp-3); font-size: var(--text-xs); min-height: 26px; }
 .btn-sec {
   background: var(--btn-sec-bg); color: var(--btn-sec-fg);
   border: 1px solid var(--border-subtle);
@@ -165,9 +170,14 @@ button:active { transform: scale(0.97); }
 /* ===== Inputs ===== */
 select {
   font-size: var(--text-xs); background: var(--input-bg); color: var(--input-fg);
-  border: 1px solid var(--input-border); border-radius: var(--r-sm); padding: 2px 6px;
-  font-family: var(--font);
+  border: 1px solid var(--input-border); border-radius: var(--r-md); padding: var(--sp-1) var(--sp-4) var(--sp-1) var(--sp-2);
+  font-family: var(--font); cursor: pointer; transition: border var(--t-fast);
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 6px center; background-size: 8px;
 }
+select:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+select:hover { border-color: var(--fg-muted); }
 input[type=text], input[type=search] {
   width: 100%; padding: 5px var(--sp-2); background: var(--input-bg); color: var(--input-fg);
   border: 1px solid var(--input-border); border-radius: var(--r-sm); font-size: var(--text-sm);
@@ -181,9 +191,37 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 .mb4 { margin-bottom: var(--sp-1); }
 .mb8 { margin-bottom: var(--sp-2); }
 .mt8 { margin-top: var(--sp-2); }
-.empty { color: var(--fg-muted); font-style: italic; padding: var(--sp-5) 0; text-align: center; font-size: var(--text-sm); }
+.empty { color: var(--fg-muted); padding: var(--sp-6) 0; text-align: center; font-size: var(--text-sm); }
+.empty::before { content: attr(data-icon); display: block; font-size: 28px; margin-bottom: var(--sp-2); opacity: 0.5; }
 .loading { color: var(--fg-muted); padding: var(--sp-4) 0; text-align: center; font-size: var(--text-sm); }
 .loading::after { content: ''; display: inline-block; width: 12px; height: 12px; border: 2px solid var(--fg-muted); border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-left: 6px; vertical-align: middle; }
+
+/* Skeleton loading */
+.skeleton { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 0; }
+.skeleton-row { height: 36px; border-radius: var(--r-sm); background: linear-gradient(90deg, var(--input-bg) 25%, var(--bg-surface) 50%, var(--input-bg) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+.skeleton-row:nth-child(2) { width: 85%; }
+.skeleton-row:nth-child(3) { width: 70%; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Markdown body content */
+.md-body { font-size: var(--text-sm); line-height: 1.6; color: var(--fg); word-wrap: break-word; }
+.md-body h1, .md-body h2, .md-body h3 { font-size: var(--text-base); font-weight: 600; margin: var(--sp-2) 0 var(--sp-1); border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--sp-1); }
+.md-body h3 { font-size: var(--text-sm); border: none; }
+.md-body p { margin: var(--sp-1) 0; }
+.md-body ul, .md-body ol { padding-left: var(--sp-4); margin: var(--sp-1) 0; }
+.md-body li { margin: 2px 0; }
+.md-body code { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--input-bg); padding: 1px 4px; border-radius: var(--r-sm); }
+.md-body pre { background: var(--input-bg); padding: var(--sp-2); border-radius: var(--r-sm); overflow-x: auto; margin: var(--sp-2) 0; }
+.md-body pre code { background: none; padding: 0; }
+.md-body blockquote { border-left: 3px solid var(--border); padding-left: var(--sp-2); color: var(--fg-muted); margin: var(--sp-1) 0; }
+.md-body a { color: var(--link); text-decoration: none; }
+.md-body a:hover { text-decoration: underline; }
+.md-body img { max-width: 100%; border-radius: var(--r-sm); }
+.md-body table { border-collapse: collapse; width: 100%; margin: var(--sp-2) 0; font-size: var(--text-xs); }
+.md-body th, .md-body td { border: 1px solid var(--border-subtle); padding: var(--sp-1) var(--sp-2); text-align: left; }
+.md-body th { background: var(--input-bg); font-weight: 600; }
+.md-body hr { border: none; border-top: 1px solid var(--border-subtle); margin: var(--sp-2) 0; }
+.md-body input[type=checkbox] { margin-right: var(--sp-1); }
 
 /* ===== Badge ===== */
 .badge {
@@ -206,6 +244,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
   border-left: 2px solid transparent;
 }
 .issue-row:hover { background: var(--bg-surface); border-left-color: var(--btn-bg); }
+.issue-row:hover .issue-title { text-decoration: underline; color: var(--link); }
 .issue-num { color: var(--fg-muted); font-size: var(--text-sm); font-family: var(--font-mono); min-width: 38px; }
 .issue-title { flex: 1; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issue-label {
@@ -292,17 +331,51 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 }
 
 /* ===== Report ===== */
-.report-stat {
-  display: inline-flex; flex-direction: column; align-items: center;
-  padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md); min-width: 64px; margin-right: var(--sp-2);
-  margin-bottom: var(--sp-2); background: var(--bg-surface);
+.report-grid { display: flex; flex-direction: column; gap: var(--sp-3); }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); }
+.stat-card {
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg); padding: var(--sp-2) var(--sp-3); text-align: center;
 }
-.report-stat-num { font-size: 22px; font-weight: 700; line-height: 1.2; }
-.report-stat-label { font-size: 10px; color: var(--fg-muted); margin-top: 2px; }
-.report-item { padding: var(--sp-1) 0; font-size: var(--text-sm); border-bottom: 1px solid var(--border-subtle); }
-.report-section { margin-bottom: var(--sp-4); }
-.report-section h3 { font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--sp-1); }
+.stat-card-num { font-size: var(--text-xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat-card-label { font-size: var(--text-xs); color: var(--fg-muted); margin-top: 4px; }
+.report-section {
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg); padding: var(--sp-2) var(--sp-3);
+}
+.report-section-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--text-sm); font-weight: 600; margin: 0 0 var(--sp-2) 0;
+  padding-bottom: var(--sp-1); border-bottom: 1px solid var(--border-subtle);
+}
+.report-section-title .icon { flex-shrink: 0; }
+.report-item {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) 0; font-size: var(--text-sm);
+}
+.report-item-num {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--text-xs); color: var(--blue); white-space: nowrap; flex-shrink: 0;
+  cursor: pointer;
+}
+.report-item-num:hover { text-decoration: underline; }
+.report-item-title {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--fg-muted);
+}
+.commit-hash {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--text-xs); color: var(--blue);
+  background: var(--bg); padding: 1px 6px; border-radius: var(--r-sm); flex-shrink: 0;
+}
+.commit-msg { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.since-bar {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3); background: var(--bg);
+  border: 1px solid var(--border-subtle); border-radius: var(--r-md);
+  font-size: var(--text-sm); color: var(--fg-muted);
+}
+.scrum-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
 
 /* ===== Confirm dialog ===== */
 .dialog-backdrop {
@@ -344,38 +417,44 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 <!-- Header -->
 <div class="header">
   <div class="header-left">
-    <h2>DevSquire</h2>
+    <h2>DevSquire — Agentic Engineer</h2>
     <code>${owner}/${repo}</code>
   </div>
-  <select id="accountSelect" class="account-select" onchange="switchAccount(this.value)" style="display:none"></select>
+  <div style="display:flex;gap:var(--sp-2);align-items:center">
+    <button class="btn-s btn-sec" onclick="syncMain()">Sync Main</button>
+    <button class="btn-s btn-sec" onclick="confirmAction('Clean All?','Remove all completed/failed tasks and their worktrees.',()=>cleanAll())">Clean All</button>
+    <select id="accountSelect" class="account-select" onchange="switchAccount(this.value)" style="display:none"></select>
+  </div>
 </div>
 
 <!-- Summary bar -->
 <div class="summary">
-  <div class="stat-card" onclick="switchTab('issues')"><div class="stat-num" id="statIssues">-</div><div class="stat-label">Issues</div></div>
-  <div class="stat-card" onclick="switchTab('prs')"><div class="stat-num" id="statPRs">-</div><div class="stat-label">PRs</div></div>
-  <div class="stat-card" onclick="switchTab('tasks')"><div class="stat-num" id="statTasks">-</div><div class="stat-label">Tasks</div></div>
-  <div class="stat-card" onclick="switchTab('actions')"><div class="stat-num" id="statActions">-</div><div class="stat-label">Actions</div></div>
+  <div class="stat-card stat-issues" onclick="switchTab('issues')"><div class="stat-num" id="statIssues">-</div><div class="stat-label">Issues</div></div>
+  <div class="stat-card stat-prs" onclick="switchTab('prs')"><div class="stat-num" id="statPRs">-</div><div class="stat-label">PRs</div></div>
+  <div class="stat-card stat-tasks" onclick="switchTab('tasks')"><div class="stat-num" id="statTasks">-</div><div class="stat-label">Tasks</div></div>
+  <div class="stat-card stat-actions" onclick="switchTab('actions')"><div class="stat-num" id="statActions">-</div><div class="stat-label">Actions</div></div>
 </div>
 
 <!-- Main tabs -->
 <div class="tabs">
-  <button class="tab active" data-tab="issues" onclick="switchTab('issues')">Issues</button>
-  <button class="tab" data-tab="prs" onclick="switchTab('prs')">PRs</button>
-  <button class="tab" data-tab="tasks" onclick="switchTab('tasks')">Tasks</button>
-  <button class="tab" data-tab="actions" onclick="switchTab('actions')">Actions</button>
-  <button class="tab" data-tab="skills" onclick="switchTab('skills')">Skills</button>
-  <button class="tab" data-tab="report" onclick="switchTab('report')">Report</button>
+  <button class="tab active" data-tab="issues" onclick="switchTab('issues')">📋 Issues</button>
+  <button class="tab" data-tab="prs" onclick="switchTab('prs')">🔀 PRs</button>
+  <button class="tab" data-tab="tasks" onclick="switchTab('tasks')">⚙️ Tasks</button>
+  <button class="tab" data-tab="actions" onclick="switchTab('actions')">⚡ Actions <span class="tab-badge pulse" id="actionBadge" style="display:none;background:var(--yellow);color:#000">0</span></button>
+  <button class="tab" data-tab="skills" onclick="switchTab('skills')">🧩 Skills</button>
+  <button class="tab" data-tab="report" onclick="switchTab('report')">📊 Report</button>
 </div>
 
 <!-- ======== ISSUES TAB ======== -->
 <div class="tab-content active" id="tc-issues">
   <div class="pad">
-    <div class="row mb8">
+    <div class="row mb8" style="gap:var(--sp-2)">
       <input type="search" id="issueSearch" placeholder="Search issues..." oninput="filterIssues()" class="flex1" />
+      <button class="btn-s btn-ghost" id="backlogBtn" onclick="toggleBacklog()" style="display:none;white-space:nowrap"></button>
       <button class="btn-s btn-sec" onclick="refreshIssues()">↻</button>
     </div>
-    <div id="issueList"><div class="loading">Loading issues</div></div>
+    <div class="issue-filter-info" id="issueFilterInfo" style="display:none;font-size:var(--text-xs);color:var(--fg-muted);padding:0 var(--sp-2) var(--sp-1)"></div>
+    <div id="issueList"><div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div></div>
     <div class="row mt8">
       <input type="text" id="issueUrl" placeholder="#123 or paste URL..." class="flex1" />
       <button onclick="submitManualIssue()">Go</button>
@@ -389,11 +468,16 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
     <div class="sub-tabs">
       <button class="sub-tab active" id="prTabMine" onclick="switchPRFilter('mine')">My PRs</button>
       <button class="sub-tab" id="prTabReview" onclick="switchPRFilter('review')">Review Requested</button>
+      <span style="flex:1"></span>
+      <button class="sub-tab active" id="prSubAll" onclick="switchMyPRSub('all')" style="font-size:10px">All</button>
+      <button class="sub-tab" id="prSubReady" onclick="switchMyPRSub('ready')" style="font-size:10px">Ready to Merge</button>
     </div>
-    <div class="row mb8 mt8">
-      <button class="btn-s btn-sec" onclick="refreshPRs()">↻ Refresh</button>
+    <div class="row mb8 mt8" style="gap:var(--sp-2)">
+      <input id="prInput" type="text" class="input" placeholder="PR # or URL" style="flex:1" onkeydown="if(event.key==='Enter')reviewPRInput()">
+      <button class="btn-s btn-pri" onclick="reviewPRInput()">Review</button>
+      <button class="btn-s btn-sec" onclick="refreshPRs()">↻</button>
     </div>
-    <div id="prList"><div class="loading">Loading PRs</div></div>
+    <div id="prList"><div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div></div>
   </div>
 </div>
 
@@ -403,14 +487,14 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
     <div class="row mb8">
       <button class="btn-s btn-sec" onclick="refreshTasks()">↻ Refresh</button>
     </div>
-    <div id="taskList"><div class="empty">No active tasks</div></div>
+    <div id="taskList"><div class="empty" data-icon="⚙️">No active tasks</div></div>
   </div>
 </div>
 
 <!-- ======== ACTIONS TAB ======== -->
 <div class="tab-content" id="tc-actions">
   <div class="pad">
-    <div id="actionList"><div class="empty">No pending actions</div></div>
+    <div id="actionList"><div class="empty" data-icon="⚡">No pending actions</div></div>
   </div>
 </div>
 
@@ -421,8 +505,9 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
       <button class="btn-s" id="skillFilterAll" onclick="filterSkills('all')">All</button>
       <button class="btn-s btn-sec" id="skillFilterCmd" onclick="filterSkills('command')">Commands</button>
       <button class="btn-s btn-sec" id="skillFilterAgent" onclick="filterSkills('agent')">Agents</button>
+      <button class="btn-s btn-sec" id="skillFilterSkill" onclick="filterSkills('skill')">Skills</button>
     </div>
-    <div id="skillList"><div class="loading">Loading</div></div>
+    <div id="skillList"><div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div></div></div>
   </div>
 </div>
 
@@ -454,13 +539,23 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 
 <script>
 const vscode = acquireVsCodeApi();
+const REPO_URL = 'https://github.com/${owner}/${repo}';
+function rIssue(n) { return '<span class="report-item-num" onclick="openExternal(REPO_URL+&quot;/issues/'+n+'&quot;)">#'+n+'</span>'; }
+function rPR(n) { return '<span class="report-item-num" onclick="openExternal(REPO_URL+&quot;/pull/'+n+'&quot;)">PR #'+n+'</span>'; }
+function cisBadge(status) {
+  if (status === 'SUCCESS') return '<span class="badge badge-green">CI ✓</span>';
+  if (status === 'FAILURE' || status === 'ERROR') return '<span class="badge badge-red badge-pulse">CI ✗</span>';
+  if (status === 'PENDING') return '<span class="badge badge-yellow">CI ⏳</span>';
+  return '';
+}
 
 // ===== State =====
 let issues = [], prs = { mine: [], review: [] }, tasks = [], decisions = [], skills = [], accounts = [];
 let currentTab = 'issues', prFilter = 'mine', reportView = 'eod', skillFilter = 'all';
-let expandedIssue = null, expandedTask = null, expandedSkill = null;
+let expandedIssue = null, expandedTask = null, expandedSkill = null, expandedPR = null;
 let confirmCallback = null;
 let issuesLoaded = false, prsLoaded = false;
+let myPRSubFilter = 'all'; // 'all' | 'ready'
 
 // ===== Tab switching =====
 function switchTab(tab) {
@@ -478,28 +573,65 @@ function switchTab(tab) {
 
 // ===== Issues (assigned to me only) =====
 function refreshIssues() {
-  document.getElementById('issueList').innerHTML = '<div class="loading">Loading issues</div>';
+  document.getElementById('issueList').innerHTML = '<div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>';
   vscode.postMessage({ type: 'getIssues', filter: 'mine' });
 }
+let showBacklog = false;
+const BACKLOG_LABELS = ['backlog', 'icebox', 'wontfix', 'on-hold', 'deferred'];
+function isBacklog(i) { return i.labels.some(l => BACKLOG_LABELS.includes(l.toLowerCase())); }
+function toggleBacklog() { showBacklog = !showBacklog; filterIssues(); }
 function filterIssues() {
   const q = document.getElementById('issueSearch').value.toLowerCase();
-  renderIssues(issues.filter(i => (i.title + ' #' + i.number + ' ' + i.labels.join(' ')).toLowerCase().includes(q)));
+  const backlogCount = issues.filter(isBacklog).length;
+  const btn = document.getElementById('backlogBtn');
+  if (backlogCount > 0) {
+    btn.style.display = '';
+    btn.textContent = (showBacklog ? 'Hide' : 'Show') + ' backlog (' + backlogCount + ')';
+    btn.className = 'btn-s ' + (showBacklog ? 'btn-sec' : 'btn-ghost');
+  } else { btn.style.display = 'none'; }
+  const filtered = issues.filter(i => {
+    if (!showBacklog && isBacklog(i)) return false;
+    return (i.title + ' #' + i.number + ' ' + i.labels.join(' ')).toLowerCase().includes(q);
+  });
+  const info = document.getElementById('issueFilterInfo');
+  if (filtered.length !== issues.length) {
+    info.style.display = '';
+    info.textContent = 'Showing ' + filtered.length + ' of ' + issues.length + (!showBacklog && backlogCount > 0 && !q ? ' (' + backlogCount + ' backlog hidden)' : '');
+  } else { info.style.display = 'none'; }
+  renderIssues(filtered);
+}
+function getIssueTaskPhase(num) {
+  const t = tasks.find(t => t.label && t.label.includes('#' + num));
+  return t ? t.phase || t.status : null;
+}
+function issueTaskId(num) {
+  const t = tasks.find(t => t.label && t.label.includes('#' + num));
+  return t ? t.id : null;
+}
+function phaseBadge(phase) {
+  if (!phase) return '';
+  const map = { done: 'badge-green', failed: 'badge-red', implementing: 'badge-yellow', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-blue', creating_pr: 'badge-purple' };
+  const cls = Object.entries(map).find(([k]) => phase.includes(k))?.[1] || 'badge-neutral';
+  return '<span class="badge ' + cls + '">' + esc(phase) + '</span>';
 }
 function renderIssues(list) {
   const c = document.getElementById('issueList');
-  if (!list.length) { c.innerHTML = '<div class="empty">No issues assigned to you</div>'; return; }
-  c.innerHTML = list.map(i => \`
-    <div class="issue-row" onclick="toggleIssueDetail(\${i.number})">
+  if (!list.length) { c.innerHTML = '<div class="empty" data-icon="📋">No issues assigned to you</div>'; return; }
+  c.innerHTML = list.map(i => {
+    const phase = getIssueTaskPhase(i.number);
+    const tid = issueTaskId(i.number);
+    return \`
+    <div class="issue-row" onclick="openExternal(&quot;\${i.url}&quot;)">
       <span class="issue-num">#\${i.number}</span>
       <span class="issue-title">\${esc(i.title)}</span>
+      \${phase ? phaseBadge(phase) : ''}
       \${i.labels.slice(0,2).map(l => '<span class="issue-label">' + esc(l) + '</span>').join('')}
       <span class="issue-actions">
         <button class="btn-s" onclick="event.stopPropagation();startIssue(\${i.number},'auto')">Auto</button>
         <button class="btn-s btn-sec" onclick="event.stopPropagation();startIssue(\${i.number},'normal')">Normal</button>
       </span>
     </div>
-    \${expandedIssue === i.number ? '<div class="issue-detail" id="issueDetail-'+i.number+'">' + (i._body || '<div class="loading">Loading</div>') + '</div>' : ''}
-  \`).join('');
+  \`}).join('');
 }
 function toggleIssueDetail(num) {
   if (expandedIssue === num) { expandedIssue = null; renderIssues(issues); return; }
@@ -507,7 +639,12 @@ function toggleIssueDetail(num) {
   renderIssues(issues);
   vscode.postMessage({ type: 'getIssueBody', number: num });
 }
-function startIssue(num, mode) { vscode.postMessage({ type: 'devIssue', issueUrl: '#' + num, mode }); toast('Started issue #' + num, 'success'); }
+function startIssue(num, mode) {
+  const issue = issues.find(i => i.number === num);
+  const title = issue ? issue.title : '';
+  vscode.postMessage({ type: 'devIssue', issueUrl: '#' + num, mode, title });
+  toast('Started issue #' + num, 'success');
+}
 function submitManualIssue() {
   const v = document.getElementById('issueUrl').value.trim();
   if (!v) return;
@@ -522,51 +659,102 @@ function switchPRFilter(f) {
   prFilter = f;
   document.getElementById('prTabMine').className = f === 'mine' ? 'sub-tab active' : 'sub-tab';
   document.getElementById('prTabReview').className = f === 'review' ? 'sub-tab active' : 'sub-tab';
+  // Show/hide My PRs sub-filter
+  document.getElementById('prSubAll').style.display = f === 'mine' ? '' : 'none';
+  document.getElementById('prSubReady').style.display = f === 'mine' ? '' : 'none';
+  renderPRs();
+}
+function switchMyPRSub(f) {
+  myPRSubFilter = f;
+  document.getElementById('prSubAll').className = f === 'all' ? 'sub-tab active' : 'sub-tab';
+  document.getElementById('prSubReady').className = f === 'ready' ? 'sub-tab active' : 'sub-tab';
   renderPRs();
 }
 function refreshPRs() {
-  document.getElementById('prList').innerHTML = '<div class="loading">Loading PRs</div>';
+  document.getElementById('prList').innerHTML = '<div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>';
   vscode.postMessage({ type: 'getPRs' });
 }
 function renderPRs() {
-  const list = prFilter === 'mine' ? prs.mine : prs.review;
+  let list = prFilter === 'mine' ? prs.mine : prs.review;
+  if (prFilter === 'mine' && myPRSubFilter === 'ready') {
+    list = list.filter(pr => pr.action === 'ready_to_merge');
+  }
   const c = document.getElementById('prList');
-  if (!list.length) { c.innerHTML = '<div class="empty">No PRs</div>'; return; }
+  if (!list.length) { c.innerHTML = '<div class="empty" data-icon="🔀">No PRs</div>'; return; }
   c.innerHTML = list.map(pr => {
     const actionBadge = pr.action ? badgeFor(pr.action) : '';
     const isOwn = prFilter === 'mine';
     return \`
-    <div class="pr-card">
+    <div class="pr-card" onclick="togglePRBody(\${pr.number})" style="cursor:pointer">
       <div class="pr-header">
         <span class="pr-title">#\${pr.number} \${esc(pr.title)}</span>
         \${actionBadge}
       </div>
       <div class="pr-meta">
         \${pr.branch} → \${pr.baseBranch}
+        \${pr.checksStatus ? ' · ' + cisBadge(pr.checksStatus) : ''}
         \${pr.commentCount ? ' · ' + pr.commentCount + ' comments' : ''}
         \${pr.unresolvedCount ? ' · <b>' + pr.unresolvedCount + ' unresolved</b>' : ''}
       </div>
+      \${expandedPR === pr.number && pr._body !== undefined ? '<div class="issue-detail" style="margin:var(--sp-1) 0 var(--sp-2);border:1px solid var(--border-subtle);border-radius:var(--r-sm)">' + renderMd(pr._body) + '</div>' : ''}
+      \${expandedPR === pr.number && pr._body === undefined ? '<div class="loading" style="padding:var(--sp-2) 0">Loading body</div>' : ''}
       <div class="pr-actions">
-        \${isOwn ? '<button class="btn-s btn-sec" onclick="fixComments('+pr.number+')">Fix Comments</button>' : ''}
-        <button class="btn-s btn-sec" onclick="reviewPR('+pr.number+')">Review</button>
-        <button class="btn-s btn-ghost" onclick="openExternal(\\''+pr.url+'\\')">GitHub ↗</button>
-        \${isOwn ? '' : \`
-          <select class="btn-s" onchange="reviewPRWithConfig(\${pr.number}, this.value)">
-            <option value="">Review...</option>
-            <option value="normal">Normal</option>
-            <option value="auto-publish">Auto-publish</option>
-            <option value="quick-approve">Quick Approve</option>
-          </select>\`}
+        \${isOwn ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();fixComments('+pr.number+')"' + (pr.unresolvedCount ? '' : ' disabled title="No open comments"') + '>Fix Comments</button>' : ''}
+        \${!isOwn ? \`<select class="btn-s" id="strategy-\${pr.number}" onclick="event.stopPropagation()" onchange="onStrategyChange(\${pr.number})">
+          <option value="normal">Normal</option>
+          <option value="auto">Auto-publish</option>
+          <option value="quick-approve">Quick Approve</option>
+        </select>
+        <select class="btn-s" id="level-\${pr.number}" onclick="event.stopPropagation()">
+          <option value="high">🔴 Critical only</option>
+          <option value="medium" selected>🟡 Important</option>
+          <option value="low">🟢 Everything</option>
+        </select>\` : ''}
+        <button class="btn-s btn-pri" onclick="event.stopPropagation();reviewPRFromCard(\${pr.number}, \${isOwn})">Review</button>
+        <button class="btn-s btn-ghost" onclick="event.stopPropagation();openExternal(&quot;\${pr.url}&quot;)">GitHub ↗</button>
       </div>
     </div>\`;
   }).join('');
 }
+function togglePRBody(num) {
+  if (expandedPR === num) { expandedPR = null; renderPRs(); return; }
+  expandedPR = num;
+  const allPRs = [].concat(prs.mine || [], prs.review || []);
+  const pr = allPRs.find(p => p.number === num);
+  if (pr && pr._body === undefined) {
+    vscode.postMessage({ type: 'getPRBody', number: num });
+  }
+  renderPRs();
+}
 function fixComments(num) { vscode.postMessage({ type: 'fixComments', prNumber: num }); toast('Fixing comments on PR #' + num, 'info'); }
-function reviewPR(num) { vscode.postMessage({ type: 'reviewPR', prNumber: num, config: { strategy: 'normal', level: 'important' } }); }
-function reviewPRWithConfig(num, strategy) {
-  if (!strategy) return;
-  vscode.postMessage({ type: 'reviewPR', prNumber: num, config: { strategy, level: 'important' } });
-  toast('Reviewing PR #' + num + ' (' + strategy + ')', 'info');
+function reviewPRFromCard(num, isOwn) {
+  const strategy = document.getElementById('strategy-' + num)?.value || 'normal';
+  const level = strategy === 'quick-approve' ? 'high' : (document.getElementById('level-' + num)?.value || 'medium');
+  const allPRs = [].concat(prs.mine || [], prs.review || []);
+  const pr = allPRs.find(p => p.number === num);
+  const title = pr ? pr.title : '';
+  vscode.postMessage({ type: 'reviewPR', prNumber: num, config: { strategy, level, isOwn: !!isOwn }, title });
+  toast('Reviewing PR #' + num + ' (' + strategy + '/' + level + ')', 'info');
+}
+function onStrategyChange(num) {
+  const s = document.getElementById('strategy-' + num);
+  const l = document.getElementById('level-' + num);
+  if (s && l) {
+    if (s.value === 'quick-approve') { l.value = 'high'; l.disabled = true; }
+    else { l.disabled = false; }
+  }
+}
+function reviewPR(numOrUrl, isOwn) { vscode.postMessage({ type: 'reviewPR', prNumber: numOrUrl, config: { strategy: 'normal', level: 'medium', isOwn: !!isOwn } }); }
+function reviewPRInput() {
+  const input = document.getElementById('prInput').value.trim();
+  if (!input) return;
+  if (input.includes('/pull/')) { reviewPR(input, false); }
+  else {
+    const m = input.match(/^#?(\d+)$/);
+    if (m) { reviewPR(parseInt(m[1]), false); }
+    else { toast('Enter a valid PR number or URL', 'error'); return; }
+  }
+  document.getElementById('prInput').value = '';
 }
 function badgeFor(action) {
   const map = {
@@ -587,7 +775,7 @@ function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
 const PHASES = ['analyzing','exploring','planning','implementing','testing','creating_pr','done','failed'];
 function renderTasks(list) {
   const c = document.getElementById('taskList');
-  if (!list.length) { c.innerHTML = '<div class="empty">No active tasks</div>'; return; }
+  if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
   c.innerHTML = list.map(t => {
     const phaseIdx = PHASES.indexOf(t.phase || 'planned');
     const phaseClass = t.phase === 'done' ? 'done' : t.phase === 'failed' ? 'failed' : t.status === 'running' ? 'running' : '';
@@ -614,10 +802,10 @@ function renderTasks(list) {
         \${t.status === 'running' ? ' · ' + duration(t.startedAt) : ''}
       </div>
       <div class="task-actions">
-        \${t.hasTerminal ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
+        \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
         \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\')">Worktree</button>' : ''}
-        \${t.status === 'running' ? '<button class="btn-s btn-danger" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'This will kill the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
         \${t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
+        \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Send Ctrl+C to the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
       </div>
       \${eventsHtml}
     </div>\`;
@@ -626,19 +814,22 @@ function renderTasks(list) {
 function toggleTaskEvents(id) { expandedTask = expandedTask === id ? null : id; renderTasks(tasks); }
 function killTask(id) { vscode.postMessage({ type: 'killTask', taskId: id }); }
 function cleanupTask(id) { vscode.postMessage({ type: 'cleanupTask', taskId: id }); }
+function cleanAll() { vscode.postMessage({ type: 'cleanAll' }); }
+function syncMain() { vscode.postMessage({ type: 'syncMain' }); }
 function openWorktree(id) { vscode.postMessage({ type: 'openWorktree', taskId: id }); }
 function focusTerminal(id) { vscode.postMessage({ type: 'focusTerminal', taskId: id }); }
 
 // ===== Actions (Decisions) =====
 function renderDecisions(list) {
   const c = document.getElementById('actionList');
-  if (!list.length) { c.innerHTML = '<div class="empty">No pending actions</div>'; return; }
+  if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚡">No pending actions</div>'; return; }
   c.innerHTML = list.map(d => \`
     <div class="action-card">
       <div class="action-title">\${esc(d.title)}</div>
       <div class="action-msg">\${esc(d.message)}</div>
       <div class="action-btns">
-        \${d.prUrl ? '<button class="btn-s btn-sec" onclick="openExternal(\\''+d.prUrl+'\\')">View PR</button>' : ''}
+        \${d.taskId ? '<button class="btn btn-pri" onclick="focusTerminal(\\''+d.taskId+'\\')">Take Action</button>' : ''}
+        \${d.prUrl ? '<button class="btn-s btn-sec" onclick="openExternal(&quot;'+d.prUrl+'&quot;)">View PR</button>' : ''}
         \${d.prNumber ? '<button class="btn-s btn-sec" onclick="fixComments('+d.prNumber+')">Fix</button>' : ''}
         <button class="btn-s btn-sec" onclick="dismissDecision('\${d.id}')">Dismiss</button>
       </div>
@@ -652,19 +843,19 @@ function filterSkills(f) {
   document.getElementById('skillFilterAll').className = f === 'all' ? 'btn-s' : 'btn-s btn-sec';
   document.getElementById('skillFilterCmd').className = f === 'command' ? 'btn-s' : 'btn-s btn-sec';
   document.getElementById('skillFilterAgent').className = f === 'agent' ? 'btn-s' : 'btn-s btn-sec';
+  document.getElementById('skillFilterSkill').className = f === 'skill' ? 'btn-s' : 'btn-s btn-sec';
   renderSkills();
 }
 function renderSkills() {
   const list = skillFilter === 'all' ? skills : skills.filter(s => s.type === skillFilter);
   const c = document.getElementById('skillList');
-  if (!list.length) { c.innerHTML = '<div class="empty">No skills found</div>'; return; }
+  if (!list.length) { c.innerHTML = '<div class="empty" data-icon="🧩">No skills found</div>'; return; }
   c.innerHTML = list.map(s => \`
     <div class="skill-card" onclick="toggleSkill('\${esc(s.name)}')">
       <div class="skill-header">
         <span class="skill-name">\${esc(s.name)}</span>
         <span class="row">
           <span class="badge badge-neutral">\${s.type}</span>
-          \${s.isPersonal ? '<span class="badge badge-purple">personal</span>' : ''}
         </span>
       </div>
       <div class="skill-desc">\${esc(s.description)}</div>
@@ -688,35 +879,59 @@ function switchReportView(v) {
   refreshReport();
 }
 function refreshReport() {
-  document.getElementById('reportContent').innerHTML = '<div class="loading">Loading report</div>';
+  document.getElementById('reportContent').innerHTML = '<div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>';
   vscode.postMessage({ type: 'getReport', view: reportView });
 }
 function renderEOD(r) {
   const c = document.getElementById('reportContent');
   c.innerHTML = \`
-    <div class="row mb8" style="flex-wrap:wrap">
-      <div class="report-stat"><div class="report-stat-num">\${r.issuesClosed}</div><div class="report-stat-label">Closed</div></div>
-      <div class="report-stat"><div class="report-stat-num">\${r.prsMerged}</div><div class="report-stat-label">Merged</div></div>
-      <div class="report-stat"><div class="report-stat-num">\${r.prsOpen}</div><div class="report-stat-label">Open PRs</div></div>
-      <div class="report-stat"><div class="report-stat-num">\${r.commitsToday}</div><div class="report-stat-label">Commits</div></div>
+    <div class="report-grid">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-card-num">\${r.issuesClosed}</div><div class="stat-card-label">Issues Closed</div></div>
+        <div class="stat-card"><div class="stat-card-num">\${r.prsMerged}</div><div class="stat-card-label">PRs Merged</div></div>
+        <div class="stat-card"><div class="stat-card-num">\${r.prsOpen}</div><div class="stat-card-label">Open PRs</div></div>
+        <div class="stat-card"><div class="stat-card-num">\${r.commitsToday}</div><div class="stat-card-label">Commits</div></div>
+      </div>
+      \${r.closedIssues.length || r.mergedPRs.length ? '<div class="report-section"><div class="report-section-title">✅ Completed Today</div>'
+        + r.closedIssues.map(i => '<div class="report-item">'+rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+'</span></div>').join('')
+        + r.mergedPRs.map(p => '<div class="report-item">'+rPR(p.number)+'<span class="report-item-title">'+esc(p.title)+'</span><span class="badge badge-green">merged</span></div>').join('')
+        + '</div>' : ''}
+      \${r.openPRs.length ? '<div class="report-section"><div class="report-section-title">🔀 Open PRs</div>'
+        + r.openPRs.map(p => '<div class="report-item">'+rPR(p.number)+'<span class="report-item-title">'+esc(p.title)+'</span>'+badgeFor(p.action)+'</div>').join('')
+        + '</div>' : ''}
+      \${r.commits.length ? '<div class="report-section"><div class="report-section-title">📝 Commits Today ('+r.commits.length+')</div>'
+        + r.commits.slice(0,10).map(c => '<div class="report-item"><span class="commit-hash">'+c.sha.substring(0,7)+'</span><span class="commit-msg">'+esc(c.message)+'</span></div>').join('')
+        + '</div>' : ''}
+      \${r.carryOver.length ? '<div class="report-section"><div class="report-section-title">📋 Carry Over ('+r.carryOver.length+')</div>'
+        + r.carryOver.map(i => '<div class="report-item">'+rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+'</span></div>').join('')
+        + '</div>' : ''}
     </div>
-    \${r.closedIssues.length ? '<div class="report-section"><h3>Closed Issues</h3>' + r.closedIssues.map(i => '<div class="report-item">#'+i.number+' '+esc(i.title)+'</div>').join('') + '</div>' : ''}
-    \${r.mergedPRs.length ? '<div class="report-section"><h3>Merged PRs</h3>' + r.mergedPRs.map(p => '<div class="report-item">#'+p.number+' '+esc(p.title)+'</div>').join('') + '</div>' : ''}
-    \${r.openPRs.length ? '<div class="report-section"><h3>Open PRs</h3>' + r.openPRs.map(p => '<div class="report-item">#'+p.number+' '+esc(p.title)+' '+badgeFor(p.action)+'</div>').join('') + '</div>' : ''}
-    \${r.commits.length ? '<div class="report-section"><h3>Commits Today</h3>' + r.commits.slice(0,10).map(c => '<div class="report-item" style="font-size:11px"><code>'+c.sha.substring(0,7)+'</code> '+esc(c.message)+'</div>').join('') + '</div>' : ''}
-    \${r.carryOver.length ? '<div class="report-section"><h3>Carry Over</h3>' + r.carryOver.map(i => '<div class="report-item">#'+i.number+' '+esc(i.title)+'</div>').join('') + '</div>' : ''}
   \`;
 }
 function renderScrum(r) {
   const c = document.getElementById('reportContent');
   c.innerHTML = \`
-    <div style="font-size:11px;color:var(--fg-muted);margin-bottom:8px">Since: \${shortTime(r.since)}</div>
-    <div class="report-section"><h3>Done</h3>\${r.done.length ? r.done.map(i => '<div class="report-item">#'+i.number+' '+esc(i.title)+'</div>').join('') : '<div class="empty">Nothing yet</div>'}</div>
-    <div class="report-section"><h3>Ongoing</h3>\${r.ongoing.length ? r.ongoing.map(i => '<div class="report-item">#'+i.number+' '+esc(i.title)+'</div>').join('') : '<div class="empty">Nothing</div>'}</div>
-    <div class="report-section"><h3>Blockers</h3>\${r.blockers.length ? r.blockers.map(i => '<div class="report-item">#'+i.number+' '+esc(i.title)+' — '+esc(i.reason||'')+'</div>').join('') : '<div class="empty">No blockers</div>'}</div>
-    <div class="row mt8">
-      <button class="btn-s" onclick="postScrum()">Post to GitHub</button>
-      <button class="btn-s btn-sec" onclick="markScrum()">Mark Scrum</button>
+    <div class="report-grid">
+      <div class="since-bar">🕐 Since: \${shortTime(r.since)}</div>
+      <div class="report-section">
+        <div class="report-section-title">✅ Done (\${r.done.length})</div>
+        \${r.done.length ? r.done.map(i => '<div class="report-item">'+rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+'</span></div>').join('')
+          : '<div class="empty">No completed items since last scrum.</div>'}
+      </div>
+      <div class="report-section">
+        <div class="report-section-title">🔄 Ongoing (\${r.ongoing.length})</div>
+        \${r.ongoing.length ? r.ongoing.map(i => '<div class="report-item">'+rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+'</span></div>').join('')
+          : '<div class="empty">No ongoing items.</div>'}
+      </div>
+      <div class="report-section">
+        <div class="report-section-title">🚫 Blockers (\${r.blockers.length})</div>
+        \${r.blockers.length ? r.blockers.map(i => '<div class="report-item">'+rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+(i.reason ? ' — '+esc(i.reason) : '')+'</span></div>').join('')
+          : '<div class="empty">No blockers — smooth sailing!</div>'}
+      </div>
+      <div class="scrum-actions">
+        <button class="btn-s btn-pri" onclick="postScrum()">Post to GitHub</button>
+        <button class="btn-s btn-sec" onclick="markScrum()">Mark Scrum</button>
+      </div>
     </div>
   \`;
 }
@@ -754,6 +969,23 @@ function toast(msg, variant) {
 
 // ===== Utilities =====
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function renderMd(raw) {
+  if (!raw) return '<em>No description</em>';
+  let h = esc(raw);
+  var BT = String.fromCharCode(96);
+  h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  h = h.replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>');
+  h = h.replace(new RegExp(BT + '([^' + BT + ']+)' + BT, 'g'), '<code>$1</code>');
+  h = h.replace(/^- \\[x\\] (.+)$/gm, '<li><input type="checkbox" checked disabled>$1</li>');
+  h = h.replace(/^- \\[ \\] (.+)$/gm, '<li><input type="checkbox" disabled>$1</li>');
+  h = h.replace(/^- (.+)$/gm, '<li>$1</li>');
+  h = h.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  h = h.replace(/---/g, '<hr>');
+  h = h.replace(/\\n/g, '<br>');
+  return '<div class="md-body">' + h + '</div>';
+}
 function shortTime(ts) { if (!ts) return ''; try { return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); } catch { return ts; } }
 function duration(ts) {
   if (!ts) return '';
@@ -770,11 +1002,16 @@ window.addEventListener('message', e => {
     case 'issues':
       issues = msg.data; issuesLoaded = true;
       document.getElementById('statIssues').textContent = issues.length;
-      renderIssues(issues);
+      filterIssues();
       break;
     case 'issueBody':
       { const issue = issues.find(i => i.number === msg.number);
       if (issue) { issue._body = msg.body; renderIssues(issues); } }
+      break;
+    case 'prBody':
+      { const allPRs = [].concat(prs.mine || [], prs.review || []);
+      const pr = allPRs.find(p => p.number === msg.number);
+      if (pr) { pr._body = msg.body; renderPRs(); } }
       break;
     case 'prs':
       prs = msg.data; prsLoaded = true;
@@ -785,10 +1022,14 @@ window.addEventListener('message', e => {
       tasks = msg.data;
       document.getElementById('statTasks').textContent = tasks.filter(t => t.status === 'running').length;
       renderTasks(tasks);
+      if (issuesLoaded) filterIssues(); // refresh issue phase badges
       break;
     case 'decisions':
       decisions = msg.data;
       document.getElementById('statActions').textContent = decisions.length;
+      const badge = document.getElementById('actionBadge');
+      if (decisions.length > 0) { badge.textContent = decisions.length; badge.style.display = 'inline-block'; }
+      else { badge.style.display = 'none'; }
       renderDecisions(decisions);
       break;
     case 'skills':
@@ -823,6 +1064,13 @@ document.addEventListener('keydown', e => {
 // ===== Initial load — only issues (lazy load everything else) =====
 refreshIssues();
 vscode.postMessage({ type: 'getAccounts' });
+
+// ===== Poll pending decisions every 10s =====
+setInterval(() => { vscode.postMessage({ type: 'getDecisions' }); }, 10000);
+vscode.postMessage({ type: 'getDecisions' });
+
+// ===== Auto-refresh tasks every 5s =====
+setInterval(() => { if (currentTab === 'tasks' || tasks.some(t => t.status === 'running')) { refreshTasks(); } }, 5000);
 </script>
 </body>
 </html>`;

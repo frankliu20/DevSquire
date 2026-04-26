@@ -5,6 +5,7 @@ import { TaskRunner } from './task-runner';
 import { FrameworkSync } from './framework-sync';
 import { GitHubDetector } from './github-detector';
 import { SquireDir } from './squire-dir';
+import { createBackend, BackendType } from './backend';
 import { GitHubData } from './github-data';
 import { TaskStateReader } from './task-state';
 import { SkillsReader } from './skills-reader';
@@ -25,18 +26,24 @@ export async function activate(context: vscode.ExtensionContext) {
   squireDir.ensureDir();
   squireDir.ensureGitignore();
 
+  // Create backend from user setting
+  const backendType = vscode.workspace.getConfiguration('devSquire').get<BackendType>('backend', 'copilot-cli');
+  const backend = createBackend(backendType);
+  squireDir.log('extension', `Backend: ${backend.type}`);
+
   // Sync framework
-  const frameworkSync = new FrameworkSync(context);
+  const frameworkSync = new FrameworkSync(context, backend);
   if (vscode.workspace.getConfiguration('devSquire').get('autoSyncFramework', true)) {
     await frameworkSync.sync();
+    squireDir.log('extension', 'Framework agents synced');
   }
 
   // Core services
   const ghData = new GitHubData(repoInfo.owner, repoInfo.repo);
   const worktree = new WorktreeManager();
-  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, squireDir);
+  const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, squireDir, backend);
   const taskStateReader = new TaskStateReader(squireDir.dir);
-  const skillsReader = new SkillsReader();
+  const skillsReader = new SkillsReader(backend);
   const reportGenerator = new ReportGenerator(ghData, squireDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
 
   dashboardProvider = new DashboardViewProvider(

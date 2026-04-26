@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import * as cp from 'child_process';
 import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
+import { SquireBackend } from './backend';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command';
 
@@ -19,17 +21,15 @@ export interface TaskInfo {
 }
 
 export interface ReviewConfig {
-  strategy: 'normal' | 'auto-publish' | 'quick-approve';
-  level: 'critical' | 'important' | 'everything';
+  strategy: 'normal' | 'auto' | 'quick-approve';
+  level: 'high' | 'medium' | 'low';
+  isOwn?: boolean;
 }
 
-/** Describes how to launch a copilot CLI session */
+/** Describes how to launch a task */
 interface AgentLaunch {
-  /** Agent name — launches `copilot --agent <name> --allow-all` */
   agent?: string;
-  /** Plain prompt — launches `copilot -i "<prompt>" --allow-all` */
   prompt?: string;
-  /** Sent as first message after agent REPL starts */
   initialPrompt?: string;
 }
 
@@ -43,6 +43,7 @@ export class TaskRunner {
     private workspaceRoot: string,
     private repoInfo: GitHubRepoInfo,
     private squireDir: SquireDir,
+    private backend: SquireBackend,
   ) {
     vscode.window.onDidCloseTerminal((closedTerminal) => {
       for (const task of this.tasks.values()) {
@@ -50,7 +51,7 @@ export class TaskRunner {
           task.status = 'completed';
           task.terminal = undefined;
           this._onTasksChanged.fire();
-          this.squireDir.log('tasks', `Task ${task.id} (${task.label}) terminal closed`);
+          this.squireDir.log('extension', `Task ${task.id} (${task.label}) terminal closed`);
         }
       }
     });
@@ -65,7 +66,7 @@ export class TaskRunner {
   }
 
   /** Run /squire-dev-issue — matches dashboard assign command */
-  async runDevIssue(issueInput: string, mode?: 'normal' | 'auto'): Promise<TaskInfo> {
+  async runDevIssue(issueInput: string, mode?: 'normal' | 'auto', issueTitle?: string): Promise<TaskInfo> {
     const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('devIssue.mode', 'auto') as 'normal' | 'auto';
     const issueNum = this.extractIssueNumber(issueInput);
     const issueUrl = issueNum
@@ -78,8 +79,8 @@ export class TaskRunner {
     const wt = this.worktree.create(this.workspaceRoot, branchName);
 
     const terminalTitle = issueNum
-      ? `Copilot: #${issueNum}`
-      : `Copilot: dev-issue-adhoc-${Date.now()}`;
+      ? `Squire: Dev #${issueNum}`
+      : `Squire: adhoc-${Date.now()}`;
 
     const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
     const agentArgs: AgentLaunch = {
@@ -90,7 +91,7 @@ export class TaskRunner {
     const taskInfo: TaskInfo = {
       id: `dev-${Date.now()}`,
       type: 'dev-issue',
-      label: issueNum ? `Issue #${issueNum}` : issueInput.substring(0, 40),
+      label: this.formatDevLabel(effectiveMode, issueNum, issueTitle, issueInput),
       issueUrl,
       worktreeBranch: branchName,
       worktreeDir: wt?.path,
@@ -119,32 +120,51 @@ export class TaskRunner {
     this.launchTerminal(taskInfo, {
       agent: 'squire-watch-pr',
       initialPrompt: `Repo: ${this.repoSlug}. Auto-fix CI: ${autoFixCI ? 'on' : 'off'}. Auto-fix comments: ${autoFixComments ? 'on' : 'off'}.`,
-    }, this.workspaceRoot, 'Copilot: Watch PRs', 'eye');
+    }, this.workspaceRoot, 'Squire: Watch PRs', 'eye');
     return taskInfo;
   }
 
   /** Review a PR via squire-pr-reviewer agent */
-  async runReviewPR(prNumber: number, config?: Partial<ReviewConfig>): Promise<TaskInfo> {
+  async runReviewPR(prNumberOrUrl: number | string, config?: Partial<ReviewConfig>, prTitle?: string): Promise<TaskInfo> {
     const cfg = vscode.workspace.getConfiguration('devSquire');
     const strategy = config?.strategy || cfg.get<string>('reviewPR.strategy', 'normal') as ReviewConfig['strategy'];
-    const level = config?.level || cfg.get<string>('reviewPR.level', 'important') as ReviewConfig['level'];
-    const prUrl = `${this.repoUrl}/pull/${prNumber}`;
+    const level = config?.level || cfg.get<string>('reviewPR.level', 'medium') as ReviewConfig['level'];
+
+    let prUrl: string;
+    let prNumber: number | undefined;
+    if (typeof prNumberOrUrl === 'string' && prNumberOrUrl.startsWith('http')) {
+      prUrl = prNumberOrUrl;
+      const m = prUrl.match(/\/pull\/(\d+)/);
+      prNumber = m ? parseInt(m[1]) : undefined;
+    } else {
+      prNumber = typeof prNumberOrUrl === 'string' ? parseInt(prNumberOrUrl) : prNumberOrUrl;
+      prUrl = `${this.repoUrl}/pull/${prNumber}`;
+    }
+
+    const prLabel = prNumber ? `#${prNumber}` : prUrl;
 
     let strategySuffix = '';
-    if (strategy === 'quick-approve') strategySuffix = ' [Quick Approve]';
-    else if (strategy === 'auto-publish') strategySuffix = ' [Auto]';
+    if (strategy === 'quick-approve') strategySuffix = '[Quick Approve]';
+    else if (strategy === 'auto') strategySuffix = '[Auto]';
+    else strategySuffix = '[Normal]';
 
-    const terminalTitle = `Copilot: Review PR #${prNumber}${strategySuffix}`;
+    const levelSuffix = level !== 'medium' ? ` ${level}` : '';
+    const terminalTitle = `Squire: Review PR ${prLabel}`;
+
+    let prompt = `Review this PR: ${prUrl} --strategy ${strategy} --level ${level}`;
+    if (config?.isOwn) {
+      prompt += '\nIMPORTANT: This is the user\'s own PR. NEVER publish any comments, approvals, or reviews to GitHub. Present all findings locally only.';
+    }
 
     const agentArgs: AgentLaunch = {
       agent: 'squire-pr-reviewer',
-      initialPrompt: `Review this PR: ${prUrl} --strategy ${strategy} --level ${level}`,
+      initialPrompt: prompt,
     };
 
     const taskInfo: TaskInfo = {
       id: `review-${Date.now()}`,
       type: 'review-pr',
-      label: `Review PR #${prNumber}`,
+      label: `${strategySuffix} Review PR ${prLabel}${prTitle ? ' ' + prTitle : ''}`,
       prNumber,
       status: 'running',
       createdAt: Date.now(),
@@ -162,7 +182,7 @@ export class TaskRunner {
       agent: 'squire-dev-issue',
       initialPrompt: `${autoFlag}check open comments on ${this.repoUrl}/pull/${prNumber} and fix them`,
     };
-    const terminalTitle = `Copilot: Fix PR #${prNumber} comments`;
+    const terminalTitle = `Squire: Fix PR #${prNumber} comments`;
 
     const taskInfo: TaskInfo = {
       id: `fix-${Date.now()}`,
@@ -182,7 +202,7 @@ export class TaskRunner {
     const label = command.startsWith('/')
       ? command.split(' ')[0]
       : command.substring(0, 40) + (command.length > 40 ? '…' : '');
-    const terminalTitle = `Copilot: ${label}`;
+    const terminalTitle = `Squire: ${label}`;
 
     const taskInfo: TaskInfo = {
       id: `cmd-${Date.now()}`,
@@ -203,11 +223,10 @@ export class TaskRunner {
   killTask(taskId: string): void {
     const task = this.tasks.get(taskId);
     if (task?.terminal) {
-      task.terminal.dispose();
+      task.terminal.sendText('\x03', false); // Ctrl+C
       task.status = 'failed';
-      task.terminal = undefined;
       this._onTasksChanged.fire();
-      this.squireDir.log('tasks', `Task ${taskId} killed by user`);
+      this.squireDir.log('extension', `Task ${taskId} killed by user`);
     }
   }
 
@@ -221,7 +240,35 @@ export class TaskRunner {
     }
     this.tasks.delete(taskId);
     this._onTasksChanged.fire();
-    this.squireDir.log('tasks', `Task ${taskId} cleaned up`);
+    this.squireDir.log('extension', `Task ${taskId} cleaned up`);
+  }
+
+  cleanAll(): void {
+    for (const [id, task] of this.tasks) {
+      if (task.status !== 'running') {
+        if (task.terminal) task.terminal.dispose();
+        this.tasks.delete(id);
+      }
+    }
+    this.squireDir.log('extension', 'Clean all: removed logs, pending-decisions, worktrees');
+    this.squireDir.cleanDirs();
+    this._onTasksChanged.fire();
+    vscode.window.showInformationMessage('DevSquire: Clean all done.');
+  }
+
+  syncMain(): void {
+    try {
+      const defaultBranch = cp.execSync(
+        'git symbolic-ref refs/remotes/origin/HEAD --short',
+        { cwd: this.workspaceRoot, encoding: 'utf-8' },
+      ).trim().replace('origin/', '');
+      cp.execSync(`git checkout ${defaultBranch} && git pull`, { cwd: this.workspaceRoot, encoding: 'utf-8' });
+      vscode.window.showInformationMessage(`DevSquire: Synced to latest ${defaultBranch}.`);
+      this.squireDir.log('extension', `Synced to ${defaultBranch}`);
+    } catch (err: any) {
+      this.squireDir.log('extension', `Sync main failed: ${err.message || err}`);
+      vscode.window.showErrorMessage(`DevSquire: Failed to sync — ${err.message || err}`);
+    }
   }
 
   openWorktree(taskId: string): void {
@@ -240,13 +287,11 @@ export class TaskRunner {
   }
 
   /**
-   * Launch a VS Code terminal with the copilot CLI.
-   *
-   * Agent mode: `copilot --agent <name> --allow-all`, then send initialPrompt.
-   * Prompt mode: `copilot -i "<prompt>" --allow-all`.
+   * Launch a VS Code terminal with the configured backend.
    */
   private launchTerminal(taskInfo: TaskInfo, launch: AgentLaunch, cwd: string, terminalTitle: string, icon: string): void {
     this.tasks.set(taskInfo.id, taskInfo);
+    this.squireDir.log('extension', `Task created: ${taskInfo.type} — ${taskInfo.label} (${taskInfo.id})`);
     this.squireDir.logJson('tasks', {
       event: 'task_created',
       taskId: taskInfo.id,
@@ -263,22 +308,22 @@ export class TaskRunner {
     terminal.show(false);
 
     if (launch.agent) {
-      // Start copilot with the specified agent
-      terminal.sendText(`copilot --agent ${launch.agent} --allow-all`, true);
-      if (launch.initialPrompt) {
-        // Send initial prompt after REPL starts
-        setTimeout(() => {
-          terminal.sendText(launch.initialPrompt!, true);
-        }, 2000);
-      }
+      this.backend.launchAgent({ terminal, agentName: launch.agent, initialPrompt: launch.initialPrompt });
     } else if (launch.prompt) {
-      // Plain prompt — use -i flag directly
-      const sanitized = launch.prompt.replace(/\n/g, ' ').replace(/"/g, '\\"');
-      terminal.sendText(`copilot -i "${sanitized}" --allow-all`, true);
+      this.backend.launchPrompt({ terminal, prompt: launch.prompt });
     }
 
     taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
+  }
+
+  private formatDevLabel(mode: string, issueNum: string | null, title?: string, rawInput?: string): string {
+    const modeTag = mode === 'auto' ? '[Auto]' : '[Normal]';
+    if (issueNum) {
+      const suffix = title ? ` ${title}` : '';
+      return `${modeTag} Dev #${issueNum}${suffix}`;
+    }
+    return `${modeTag} ${(rawInput || 'task').substring(0, 50)}`;
   }
 
   private extractIssueNumber(input: string): string | null {

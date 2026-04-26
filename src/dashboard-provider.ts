@@ -59,6 +59,13 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         });
         break;
       }
+      case 'getPRBody': {
+        setImmediate(() => {
+          const body = this.ghData.getPRBody(msg.number);
+          this._view?.webview.postMessage({ type: 'prBody', number: msg.number, body });
+        });
+        break;
+      }
 
       // --- PRs ---
       case 'getPRs': {
@@ -80,11 +87,11 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         break;
       }
       case 'devIssue': {
-        this.taskRunner.runDevIssue(msg.issueUrl, msg.mode || 'auto');
+        this.taskRunner.runDevIssue(msg.issueUrl, msg.mode || 'auto', msg.title);
         break;
       }
       case 'reviewPR': {
-        this.taskRunner.runReviewPR(msg.prNumber, msg.config);
+        this.taskRunner.runReviewPR(msg.prNumber, msg.config, msg.title);
         break;
       }
       case 'fixComments': {
@@ -101,6 +108,14 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       }
       case 'cleanupTask': {
         this.taskRunner.cleanupTask(msg.taskId);
+        break;
+      }
+      case 'cleanAll': {
+        this.taskRunner.cleanAll();
+        break;
+      }
+      case 'syncMain': {
+        this.taskRunner.syncMain();
         break;
       }
       case 'openWorktree': {
@@ -127,7 +142,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
       // --- Skills ---
       case 'getSkills': {
-        const skills = this.skillsReader.readAll();
+        const skills = this.skillsReader.readAll(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '');
         this.post('skills', skills);
         break;
       }
@@ -183,18 +198,22 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     // Merge runtime tasks (terminals) with persisted task states (JSONL logs)
     const runtimeTasks = this.taskRunner.getAllTasks();
     const logTasks = this.taskStateReader.readAllTasks();
+    const decisions = this.taskStateReader.readDecisions();
+    const waitingTaskIds = new Set(decisions.map(d => d.taskId));
 
     // Runtime tasks take priority, supplement with log data
     const merged = runtimeTasks.map((rt) => {
       const logTask = logTasks.find(
         (lt) => lt.issueUrl === rt.issueUrl || lt.id === rt.id,
       );
+      const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? 'implementing' : 'planned');
+      const isWaiting = waitingTaskIds.has(rt.id) || waitingTaskIds.has(logTask?.id || '');
       return {
         id: rt.id,
         label: rt.label,
         type: rt.type,
         status: rt.status,
-        phase: logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? 'implementing' : 'planned'),
+        phase: isWaiting ? phase + ' (waiting)' : phase,
         branch: logTask?.branch || rt.worktreeBranch,
         prNumber: logTask?.prNumber || rt.prNumber,
         worktreeDir: rt.worktreeDir,

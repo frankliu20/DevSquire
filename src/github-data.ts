@@ -85,6 +85,10 @@ export class GitHubData {
       `gh pr list --repo ${this.slug} --state open --author @me --limit ${limit} --json number,title,state,author,headRefName,baseRefName,url,createdAt,updatedAt,isDraft,labels,reviewDecision,comments,body`,
       (raw: any[]) => raw.map(this.mapPR),
     ) || [];
+    // Fetch CI status separately (statusCheckRollup can fail on some gh versions)
+    for (const pr of prs) {
+      pr.checksStatus = this.fetchChecksStatus(pr.number);
+    }
     return prs.map((pr) => ({ ...pr, action: this.classifyPRAction(pr) }));
   }
 
@@ -146,7 +150,7 @@ export class GitHubData {
   listAccounts(): GitHubAccount[] {
     try {
       const output = cp.execSync('gh auth status 2>&1', {
-        encoding: 'utf-8', timeout: 10000, shell: true,
+        encoding: 'utf-8', timeout: 10000, shell: true as any,
       });
       const accounts: GitHubAccount[] = [];
       const lines = output.split('\n');
@@ -231,12 +235,41 @@ export class GitHubData {
     };
   }
 
+  private fetchChecksStatus(prNumber: number): string {
+    try {
+      const output = cp.execSync(
+        `gh pr view ${prNumber} --repo ${this.slug} --json statusCheckRollup`,
+        { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+      const data = JSON.parse(output);
+      return this.deriveChecksStatus(data.statusCheckRollup || []);
+    } catch {
+      return '';
+    }
+  }
+
   private classifyPRAction(pr: GitHubPR): string {
     if (pr.isDraft) return 'draft';
+    if (pr.checksStatus === 'FAILURE' || pr.checksStatus === 'ERROR') return 'ci_failing';
     if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'changes_requested';
     if (pr.unresolvedCount > 0) return 'has_unresolved_comments';
-    if (pr.reviewDecision === 'APPROVED') return 'ready_to_merge';
+    if (pr.reviewDecision === 'APPROVED' && pr.checksStatus !== 'PENDING') return 'ready_to_merge';
     if (pr.reviewDecision === 'REVIEW_REQUIRED') return 'review_pending';
     return 'waiting';
+  }
+
+  private deriveChecksStatus(rollup: any[]): string {
+    if (!rollup || rollup.length === 0) return '';
+    const hasFailure = rollup.some((c: any) => {
+      const s = c.status || c.state || c.conclusion || '';
+      return s === 'FAILURE' || s === 'ERROR' || s === 'TIMED_OUT' || s === 'ACTION_REQUIRED';
+    });
+    if (hasFailure) return 'FAILURE';
+    const hasPending = rollup.some((c: any) => {
+      const s = c.status || c.state || c.conclusion || '';
+      return s === 'PENDING' || s === 'QUEUED' || s === 'IN_PROGRESS' || s === 'WAITING' || s === 'EXPECTED';
+    });
+    if (hasPending) return 'PENDING';
+    return 'SUCCESS';
   }
 }
