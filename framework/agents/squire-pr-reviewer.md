@@ -128,12 +128,7 @@ gh api repos/$OWNER/$REPO_NAME/pulls/<number>/reviews \
 
 ## Step 2: Analyze and Present Review
 
-**Before presenting the review, log completion:**
-```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
-```
-
-Then present a structured review:
+Present a structured review:
 
 ```
 ## PR Review: #<N> — <title>
@@ -168,6 +163,11 @@ For each unresolved comment:
 **Note**: Only include sections that match the configured level. If `level: high`, omit the 🟡 and 🟢 sections entirely.
 
 ## Step 3: Act Based on Strategy
+
+**After presenting the review summary, log completion:**
+```bash
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
 
 Follow the strategy-specific behavior defined above. For `normal`, wait for user input. For `auto` and `quick-approve`, proceed immediately.
 
