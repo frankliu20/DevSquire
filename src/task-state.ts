@@ -44,6 +44,26 @@ export interface PendingDecision {
 }
 
 /**
+ * Maps JSONL event types to pipeline phases.
+ * When the agent logs an event type (e.g. "test_pass"), we can derive
+ * which pipeline phase the task has reached, even if the agent didn't
+ * explicitly set the phase field.
+ */
+const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
+  task_start: 'analyzing',
+  analysis_done: 'exploring',
+  exploration_done: 'planning',
+  plan_approved: 'implementing',
+  implementation_done: 'testing',
+  test_pass: 'creating_pr',
+  test_fail: 'test_failed',
+  manual_verify_waiting: 'waiting_manual_test',
+  manual_verify_done: 'creating_pr',
+  pr_created: 'done',
+  blocked: 'failed',
+};
+
+/**
  * Reads task state from JSONL log files and pending decisions.
  */
 export class TaskStateReader {
@@ -55,7 +75,7 @@ export class TaskStateReader {
     if (!fs.existsSync(logsDir)) return [];
 
     const tasks: TaskState[] = [];
-    const files = fs.readdirSync(logsDir).filter((f) => f.endsWith('.jsonl') && f.startsWith('task-'));
+    const files = fs.readdirSync(logsDir).filter((f) => f.endsWith('.jsonl'));
 
     for (const file of files) {
       const taskId = file.replace('.jsonl', '');
@@ -91,7 +111,12 @@ export class TaskStateReader {
           if (!startedAt) startedAt = entry.timestamp;
           updatedAt = entry.timestamp;
 
-          if (entry.phase) phase = entry.phase;
+          // Derive phase from event type if phase field is missing or generic
+          if (entry.phase) {
+            phase = entry.phase;
+          } else if (entry.type && EVENT_TYPE_TO_PHASE[entry.type]) {
+            phase = EVENT_TYPE_TO_PHASE[entry.type];
+          }
           if (entry.branch) branch = entry.branch;
           if (entry.pr_number) prNumber = entry.pr_number;
           if (entry.pr_url) prUrl = entry.pr_url;
