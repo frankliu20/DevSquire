@@ -15,6 +15,10 @@ export class CopilotChatBackend implements SquireBackend {
     throw new Error('Copilot Chat backend is not yet implemented. Use copilot-cli or claude-code.');
   }
 
+  launchInteractiveCommand(_options: PromptLaunchOptions): void {
+    throw new Error('Copilot Chat backend is not yet implemented. Use copilot-cli or claude-code.');
+  }
+
   getAgentSyncDirs(_location: 'home' | 'project', _workspaceRoot: string): { agents: string } {
     throw new Error('Copilot Chat backend is not yet implemented.');
   }
