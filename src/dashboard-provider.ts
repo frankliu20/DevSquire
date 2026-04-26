@@ -102,6 +102,10 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.taskRunner.runCommand(msg.command);
         break;
       }
+      case 'runAgent': {
+        this.taskRunner.runAgent(msg.agent, msg.input);
+        break;
+      }
       case 'killTask': {
         this.taskRunner.killTask(msg.taskId);
         break;

@@ -5,7 +5,7 @@ import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
 import { SquireBackend } from './backend';
 
-export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command';
+export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command' | 'run-agent';
 
 export interface TaskInfo {
   id: string;
@@ -196,6 +196,27 @@ export class TaskRunner {
     };
 
     this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'wrench');
+    return taskInfo;
+  }
+
+  /** Run an agent-based skill from the dashboard with user input */
+  async runAgent(agentName: string, input: string): Promise<TaskInfo> {
+    const terminalTitle = `Squire: ${agentName}`;
+
+    const agentArgs: AgentLaunch = {
+      agent: agentName,
+      initialPrompt: input,
+    };
+
+    const taskInfo: TaskInfo = {
+      id: `agent-${Date.now()}`,
+      type: 'run-agent',
+      label: `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
+      status: 'running',
+      createdAt: Date.now(),
+    };
+
+    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'squirrel');
     return taskInfo;
   }
 
