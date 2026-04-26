@@ -814,23 +814,44 @@ function badgeFor(action) {
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
 const PHASES = ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'];
-const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done' };
+const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done', fetching: 'Fetch', reviewing: 'Review', summarizing: 'Summary', monitoring: 'Monitor', fixing_ci: 'Fix CI', fixing_comments: 'Fix Comments' };
 // Map internal phases to pipeline display phases
-const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed' };
+const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed', fetching: 'fetching', reviewing: 'reviewing', summarizing: 'summarizing', monitoring: 'monitoring', fixing_ci: 'fixing_ci', fixing_comments: 'fixing_comments' };
+// Per-type pipeline phases
+const PHASE_PIPELINES = {
+  'dev-issue':    ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'],
+  'review-pr':    ['fetching','reviewing','summarizing','done'],
+  'watch-pr':     ['analyzing','monitoring','fixing_ci','fixing_comments','monitoring'],
+  'fix-comments': ['analyzing','implementing','testing','creating_pr','done'],
+  'run-command':  ['implementing','done'],
+};
+// Cyclic pipelines only highlight current step (no "done" marking for previous steps)
+const CYCLIC_TYPES = { 'watch-pr': true };
 function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
   c.innerHTML = list.map(t => {
+    const phases = PHASE_PIPELINES[t.type] || PHASE_PIPELINES['dev-issue'];
+    const isCyclic = CYCLIC_TYPES[t.type] || false;
     const rawPhase = t.phase || 'planned';
-    const displayPhase = PHASE_MAP[rawPhase] || 'analyzing';
-    const phaseIdx = PHASES.indexOf(displayPhase);
+    const displayPhase = PHASE_MAP[rawPhase] || phases[0];
+    // For cyclic pipelines, find the last occurrence to handle repeated phases (e.g. monitoring appears twice)
+    const phaseIdx = isCyclic ? phases.lastIndexOf(displayPhase) : phases.indexOf(displayPhase);
     const isFailed = rawPhase === 'failed' || rawPhase === 'test_failed';
     const phaseClass = rawPhase === 'done' ? 'done' : isFailed ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
-    const pipeline = PHASES.map((p, i) => {
+    // For cyclic: show unique steps, only highlight current; for linear: show progress bar
+    const displayPhases = isCyclic ? phases : phases.filter(p => p !== 'done');
+    const pipeline = displayPhases.map((p, i) => {
       var cls = '';
-      if (isFailed && i === phaseIdx) cls = 'failed';
-      else if (rawPhase === 'done' || i < phaseIdx) cls = 'done';
-      else if (i === phaseIdx && (t.status === 'running' || t.status === 'orphan')) cls = 'active';
+      if (isCyclic) {
+        // Cyclic: only highlight the current step, don't mark previous as done
+        if (isFailed && i === phaseIdx) cls = 'failed';
+        else if (i === phaseIdx && (t.status === 'running' || t.status === 'orphan')) cls = 'active';
+      } else {
+        if (isFailed && i === phaseIdx) cls = 'failed';
+        else if (rawPhase === 'done' || i < phaseIdx) cls = 'done';
+        else if (i === phaseIdx && (t.status === 'running' || t.status === 'orphan')) cls = 'active';
+      }
       return '<div class="pipeline-step ' + cls + '"><div class="pipeline-bar"></div><div class="pipeline-label">' + (PHASE_LABELS[p] || p) + '</div></div>';
     }).join('');
 
