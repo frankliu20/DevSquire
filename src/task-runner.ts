@@ -82,7 +82,7 @@ export class TaskRunner {
 
     const terminalTitle = issueNum
       ? `Squire: Dev #${issueNum}`
-      : `Squire: adhoc-${Date.now()}`;
+      : `Squire: dev-adhoc-${Date.now()}`;
 
     const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
     const agentArgs: AgentLaunch = {
@@ -327,6 +327,22 @@ export class TaskRunner {
       taskId: taskInfo.id,
       type: taskInfo.type,
       label: taskInfo.label,
+    });
+
+    // Write per-task JSONL with worktree_dir so the dashboard can show the
+    // Worktree button even after the extension reloads (issue #7).
+    const issueNum = taskInfo.issueUrl?.match(/\/issues\/(\d+)/)?.[1];
+    const taskLogId = issueNum ? `task-issue-${issueNum}` : `task-${taskInfo.id}`;
+    this.squireDir.logJson(taskLogId, {
+      event: 'task_start',
+      phase: 'planned',
+      task_id: taskLogId,
+      type: taskInfo.type,
+      label: taskInfo.label,
+      branch: taskInfo.worktreeBranch,
+      issue_number: issueNum ? parseInt(issueNum) : undefined,
+      issue_url: taskInfo.issueUrl,
+      worktree_dir: taskInfo.worktreeDir,
     });
 
     const terminal = vscode.window.createTerminal({
