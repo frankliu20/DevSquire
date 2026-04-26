@@ -49,8 +49,13 @@ export interface PendingDecision {
  * which pipeline phase the task has reached, even if the agent didn't
  * explicitly set the phase field.
  */
-const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
-  task_start: 'analyzing',
+/**
+ * Maps JSONL event types to pipeline phases.
+ * Returns undefined for non-phase-changing events (keeps previous phase).
+ * Aligned with dev-pilot's eventToPhase().
+ */
+const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase | null> = {
+  task_start: 'planned',
   analysis_done: 'exploring',
   exploration_done: 'planning',
   plan_approved: 'implementing',
@@ -60,8 +65,26 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   manual_verify_waiting: 'waiting_manual_test',
   manual_verify_done: 'creating_pr',
   pr_created: 'done',
+  pr_merged: 'done',
+  worktree_cleaned: 'done',
+  skill_captured: 'done',
   blocked: 'failed',
+  // Non-phase-changing events — return null to keep previous phase
+  decision_requested: null,
+  decision_dismissed: null,
+  phase_change: null, // phase field will override
 };
+
+const VALID_PHASES: Set<string> = new Set([
+  'planned', 'analyzing', 'exploring', 'planning',
+  'implementing', 'testing', 'test_failed',
+  'waiting_confirm', 'waiting_manual_test',
+  'creating_pr', 'done', 'failed',
+]);
+
+function isValidPhase(value: string): boolean {
+  return VALID_PHASES.has(value);
+}
 
 /**
  * Reads task state from JSONL log files and pending decisions.
@@ -113,11 +136,34 @@ export class TaskStateReader {
           if (!startedAt) startedAt = entry.timestamp;
           updatedAt = entry.timestamp;
 
-          // Derive phase from event type if phase field is missing or generic
+          // Derive phase: event type mapping first, then phase field override
+          if (entry.type && entry.type in EVENT_TYPE_TO_PHASE) {
+            const mapped = EVENT_TYPE_TO_PHASE[entry.type];
+            if (mapped !== null) {
+              phase = mapped;
+            }
+            // null means non-phase-changing event — keep previous phase
+          }
+          // Phase field from the log entry can override (secondary mapping)
           if (entry.phase) {
-            phase = entry.phase;
-          } else if (entry.type && EVENT_TYPE_TO_PHASE[entry.type]) {
-            phase = EVENT_TYPE_TO_PHASE[entry.type];
+            const phaseMap: Record<string, TaskPhase> = {
+              branch_setup: 'planned',
+              analysis: 'analyzing',
+              exploration: 'exploring',
+              planning: 'planning',
+              implementation: 'implementing',
+              testing: 'testing',
+              pr_creation: 'creating_pr',
+              knowledge_capture: 'done',
+              completed: 'done',
+              failed: 'failed',
+            };
+            const remapped = phaseMap[entry.phase] as TaskPhase | undefined;
+            if (remapped !== undefined) {
+              phase = remapped;
+            } else if (isValidPhase(entry.phase)) {
+              phase = entry.phase as TaskPhase;
+            }
           }
           if (entry.branch) branch = entry.branch;
           if (entry.pr_number) prNumber = entry.pr_number;

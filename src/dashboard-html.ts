@@ -625,7 +625,7 @@ function issueTaskId(num) {
 }
 function phaseBadge(phase) {
   if (!phase) return '';
-  const map = { done: 'badge-green', failed: 'badge-red', orphan: 'badge-neutral', implementing: 'badge-yellow', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-blue', creating_pr: 'badge-purple' };
+  const map = { done: 'badge-green', failed: 'badge-red', orphan: 'badge-neutral', planned: 'badge-neutral', implementing: 'badge-yellow', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-blue', creating_pr: 'badge-purple' };
   const cls = Object.entries(map).find(([k]) => phase.includes(k))?.[1] || 'badge-neutral';
   return '<span class="badge ' + cls + '">' + esc(phase) + '</span>';
 }
@@ -796,10 +796,10 @@ function badgeFor(action) {
 
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
-const PHASES = ['analyzing','exploring','planning','implementing','testing','creating_pr','done'];
-const PHASE_LABELS = { analyzing: 'Analyze', exploring: 'Explore', planning: 'Plan', implementing: 'Implement', testing: 'Build/Test', creating_pr: 'PR', done: 'Done' };
-// Map internal phases to pipeline display phases
-const PHASE_MAP = { planned: 'analyzing', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed' };
+const PHASES = ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'];
+const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyze', exploring: 'Explore', planning: 'Plan', implementing: 'Implement', testing: 'Build/Test', creating_pr: 'PR', done: 'Done' };
+// Map internal phases to pipeline display phases (12 internal → 8 display)
+const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed' };
 function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
