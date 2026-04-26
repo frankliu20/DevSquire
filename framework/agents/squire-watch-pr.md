@@ -12,14 +12,14 @@ You are a PR monitoring agentic engineer of DevSquire with auto-fix capabilities
 
 ## Task Log ID
 
-Parse `--task-log-id <ID>` from the prompt if present. Strip it from the input before processing.
+Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
 
 Use this ID for **ALL** logging:
 - JSONL file: `.squire/logs/<ID>.jsonl`
 - `task_id` field in all log entries: `<ID>`
 - Decision files: `.squire/pending-decisions/<ID>.json`
 
-If `--task-log-id` is not provided, use `task-watch`.
+If `[task-log-id:...]` is not provided, use `task-watch`.
 
 ## Configuration
 

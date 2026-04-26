@@ -455,18 +455,19 @@ export class TaskRunner {
 
     terminal.show(false);
 
-    // Inject --task-log-id so agents write to the correct JSONL file
-    const logIdFlag = `--task-log-id ${taskLogId}`;
+    // Inject task-log-id so agents write to the correct JSONL file.
+    // Use bracket syntax [task-log-id:xxx] to avoid being parsed as a CLI flag.
+    const logIdTag = `[task-log-id:${taskLogId}]`;
     if (launch.agent && launch.initialPrompt) {
-      launch.initialPrompt = `${logIdFlag} ${launch.initialPrompt}`;
+      launch.initialPrompt = `${logIdTag} ${launch.initialPrompt}`;
     } else if (launch.agent) {
-      launch.initialPrompt = logIdFlag;
+      launch.initialPrompt = logIdTag;
     }
     if (launch.interactivePrompt) {
-      launch.interactivePrompt = `${logIdFlag} ${launch.interactivePrompt}`;
+      launch.interactivePrompt = `${logIdTag} ${launch.interactivePrompt}`;
     }
     if (launch.prompt) {
-      launch.prompt = `${logIdFlag} ${launch.prompt}`;
+      launch.prompt = `${logIdTag} ${launch.prompt}`;
     }
 
     if (launch.agent) {

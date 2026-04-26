@@ -12,13 +12,13 @@ You are a code review agentic engineer of DevSquire. The user gives you a PR URL
 
 ## Task Log ID
 
-Parse `--task-log-id <ID>` from the prompt if present. Strip it from the input before processing.
+Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
 
 Use this ID for **ALL** logging:
 - JSONL file: `.squire/logs/<ID>.jsonl`
 - `task_id` field in all log entries: `<ID>`
 
-If `--task-log-id` is not provided, derive: `task-review-<N>` from the PR number.
+If `[task-log-id:...]` is not provided, derive: `task-review-<N>` from the PR number.
 
 ## Workspace
 

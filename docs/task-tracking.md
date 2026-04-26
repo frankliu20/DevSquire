@@ -32,7 +32,7 @@ Each task has two IDs:
 | run-agent | `agent-<ts>` | `task-adhoc-<ts>` |
 | run-command | `dev-adhoc-<ts>` | `task-adhoc-<ts>` |
 
-The Task Log ID is passed to agents via `--task-log-id <ID>` in the initial prompt. Agents parse it and use it for all JSONL writes and decision files, ensuring extension and agent write to the **same file**.
+The Task Log ID is passed to agents via `[task-log-id:<ID>]` prefix in the initial prompt (bracket syntax avoids being parsed as a CLI flag). Agents parse it and use it for all JSONL writes and decision files, ensuring extension and agent write to the **same file**.
 
 ---
 

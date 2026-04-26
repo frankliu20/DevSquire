@@ -26,18 +26,18 @@ Strip `--auto` and `--test-scenario <id>` from the input before processing the i
 
 ## Task Log ID
 
-Parse `--task-log-id <ID>` from the prompt if present. Strip it from the input before processing.
+Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
 
 Use this ID for **ALL** logging:
 - JSONL file: `.squire/logs/<ID>.jsonl`
 - `task_id` field in all log entries: `<ID>`
 - Decision files: `.squire/pending-decisions/<ID>.json`
 
-If `--task-log-id` is not provided, derive the ID:
+If `[task-log-id:...]` is not provided, derive the ID:
 - Issue URL with number → `task-issue-<N>`
 - Plain text / adhoc → `task-adhoc-<date>`
 
-Example: `--task-log-id task-issue-123 --auto https://github.com/org/repo/issues/123`
+Example: `[task-log-id:task-issue-123] --auto https://github.com/org/repo/issues/123`
 → `TASK_LOG_ID=task-issue-123`, mode=auto, issue URL = `https://github.com/org/repo/issues/123`
 
 ## Workspace
