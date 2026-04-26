@@ -1003,7 +1003,12 @@ function promptRunAgent(name) {
     toast('Launching Watch PRs...', 'info');
     return;
   }
-  var placeholder = name === 'squire-dev-issue' ? 'Enter issue URL or description' : 'Enter input for ' + name;
+  if (name === 'squire-dev-issue') {
+    vscode.postMessage({ type: 'runAgent', agent: name, input: '' });
+    toast('Launching Dev Issue...', 'info');
+    return;
+  }
+  var placeholder = 'Enter input for ' + name;
   vscode.postMessage({ type: 'promptInput', agent: name, placeholder: placeholder });
 }
 

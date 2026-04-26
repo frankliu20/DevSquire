@@ -142,12 +142,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       case 'promptInput': {
         const input = await vscode.window.showInputBox({ prompt: msg.placeholder, placeHolder: msg.placeholder });
         if (input?.trim()) {
-          // Route dev-issue through runDevIssue for proper worktree + task tracking
-          if (msg.agent === 'squire-dev-issue') {
-            this.taskRunner.runDevIssue(input.trim());
-          } else {
-            this.taskRunner.runAgent(msg.agent, input.trim());
-          }
+          this.taskRunner.runAgent(msg.agent, input.trim());
         }
         break;
       }

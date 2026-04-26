@@ -213,22 +213,26 @@ export class TaskRunner {
 
   /** Run an agent-based skill from the dashboard with user input */
   async runAgent(agentName: string, input: string): Promise<TaskInfo> {
-    const terminalTitle = `Squire: ${agentName}`;
+    const isDevIssue = agentName === 'squire-dev-issue';
+    const adhocId = `dev-adhoc-${Date.now()}`;
+    const terminalTitle = isDevIssue ? `Squire: ${adhocId}` : `Squire: ${agentName}`;
+    const taskId = isDevIssue ? adhocId : `agent-${Date.now()}`;
+    const taskType: TaskType = isDevIssue ? 'dev-issue' : 'run-agent';
 
     const agentArgs: AgentLaunch = {
       agent: agentName,
-      initialPrompt: input,
+      initialPrompt: input || undefined,
     };
 
     const taskInfo: TaskInfo = {
-      id: `agent-${Date.now()}`,
-      type: 'run-agent',
-      label: `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
+      id: taskId,
+      type: taskType,
+      label: isDevIssue ? `[Auto] ${adhocId}` : `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
       status: 'running',
       createdAt: Date.now(),
     };
 
-    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, 'squirrel');
+    this.launchTerminal(taskInfo, agentArgs, this.workspaceRoot, terminalTitle, isDevIssue ? 'rocket' : 'squirrel');
     return taskInfo;
   }
 
