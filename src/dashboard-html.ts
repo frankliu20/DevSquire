@@ -3,7 +3,7 @@ import { GitHubRepoInfo } from './github-detector';
 /**
  * Generates the full 6-tab dashboard HTML for the webview.
  */
-export function getDashboardHtml(repoInfo: GitHubRepoInfo): string {
+export function getDashboardHtml(repoInfo: GitHubRepoInfo, defaultMode: string = 'auto'): string {
   const { owner, repo } = repoInfo;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -258,7 +258,9 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
   border: 1px solid var(--border-subtle); border-top: none;
 }
 .issue-actions { display: flex; gap: var(--sp-1); margin-left: auto; }
+.issue-actions select { opacity: 0; transition: opacity var(--t-fast); }
 .issue-actions button { opacity: 0; transition: opacity var(--t-fast); }
+.issue-row:hover .issue-actions select { opacity: 1; }
 .issue-row:hover .issue-actions button { opacity: 1; }
 
 /* ===== PR card ===== */
@@ -464,6 +466,10 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
     <div id="issueList"><div class="skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div></div>
     <div class="row mt8">
       <input type="text" id="issueUrl" placeholder="#123 or paste URL..." class="flex1" />
+      <select id="manualMode" class="btn-s">
+        <option value="auto" \${defaultMode === 'auto' ? 'selected' : ''}>Auto</option>
+        <option value="normal" \${defaultMode === 'normal' ? 'selected' : ''}>Normal</option>
+      </select>
       <button onclick="submitManualIssue()">Go</button>
     </div>
   </div>
@@ -584,6 +590,7 @@ function refreshIssues() {
   vscode.postMessage({ type: 'getIssues', filter: 'mine' });
 }
 let showBacklog = false;
+const defaultMode = '${defaultMode}';
 const BACKLOG_LABELS = ['backlog', 'icebox', 'wontfix', 'on-hold', 'deferred'];
 function isBacklog(i) { return i.labels.some(l => BACKLOG_LABELS.includes(l.toLowerCase())); }
 function toggleBacklog() { showBacklog = !showBacklog; filterIssues(); }
@@ -634,8 +641,11 @@ function renderIssues(list) {
       \${phase ? phaseBadge(phase) : ''}
       \${i.labels.slice(0,2).map(l => '<span class="issue-label">' + esc(l) + '</span>').join('')}
       <span class="issue-actions">
-        <button class="btn-s" onclick="event.stopPropagation();startIssue(\${i.number},'auto')">Auto</button>
-        <button class="btn-s btn-sec" onclick="event.stopPropagation();startIssue(\${i.number},'normal')">Normal</button>
+        <select class="btn-s" id="mode-\${i.number}" onclick="event.stopPropagation()">
+          <option value="auto" \${defaultMode==='auto'?'selected':''}>Auto</option>
+          <option value="normal" \${defaultMode==='normal'?'selected':''}>Normal</option>
+        </select>
+        <button class="btn-s btn-pri" onclick="event.stopPropagation();assignIssue(\${i.number})">Assign</button>
       </span>
     </div>
   \`}).join('');
@@ -646,6 +656,11 @@ function toggleIssueDetail(num) {
   renderIssues(issues);
   vscode.postMessage({ type: 'getIssueBody', number: num });
 }
+function assignIssue(num) {
+  const sel = document.getElementById('mode-' + num);
+  const mode = sel ? sel.value : defaultMode;
+  startIssue(num, mode);
+}
 function startIssue(num, mode) {
   const issue = issues.find(i => i.number === num);
   const title = issue ? issue.title : '';
@@ -655,7 +670,8 @@ function startIssue(num, mode) {
 function submitManualIssue() {
   const v = document.getElementById('issueUrl').value.trim();
   if (!v) return;
-  vscode.postMessage({ type: 'devIssue', issueUrl: v, mode: 'auto' });
+  const mode = document.getElementById('manualMode').value || defaultMode;
+  vscode.postMessage({ type: 'devIssue', issueUrl: v, mode });
   document.getElementById('issueUrl').value = '';
   toast('Task started', 'success');
 }
