@@ -329,22 +329,29 @@ export class TaskRunner {
     this.squireDir.log('extension', 'Clean all: removed logs, pending-decisions, worktrees');
     this.squireDir.cleanDirs();
     this._onTasksChanged.fire();
+    // Sync back to main after cleanup
+    this.syncMain();
     vscode.window.showInformationMessage('DevSquire: Clean all done.');
   }
 
   syncMain(): void {
-    try {
-      const defaultBranch = cp.execSync(
-        'git symbolic-ref refs/remotes/origin/HEAD --short',
-        { cwd: this.workspaceRoot, encoding: 'utf-8' },
-      ).trim().replace('origin/', '');
-      cp.execSync(`git checkout ${defaultBranch} && git pull`, { cwd: this.workspaceRoot, encoding: 'utf-8' });
-      vscode.window.showInformationMessage(`DevSquire: Synced to latest ${defaultBranch}.`);
-      this.squireDir.log('extension', `Synced to ${defaultBranch}`);
-    } catch (err: any) {
-      this.squireDir.log('extension', `Sync main failed: ${err.message || err}`);
-      vscode.window.showErrorMessage(`DevSquire: Failed to sync — ${err.message || err}`);
-    }
+    // Run in background to avoid blocking extension host
+    const cwd = this.workspaceRoot;
+    const squireDir = this.squireDir;
+    setImmediate(() => {
+      try {
+        const defaultBranch = cp.execSync(
+          'git symbolic-ref refs/remotes/origin/HEAD --short',
+          { cwd, encoding: 'utf-8', timeout: 30000 },
+        ).trim().replace('origin/', '');
+        cp.execSync(`git checkout ${defaultBranch} && git pull`, { cwd, encoding: 'utf-8', timeout: 30000 });
+        vscode.window.showInformationMessage(`DevSquire: Synced to latest ${defaultBranch}.`);
+        squireDir.log('extension', `Synced to ${defaultBranch}`);
+      } catch (err: any) {
+        squireDir.log('extension', `Sync main failed: ${err.message || err}`);
+        vscode.window.showErrorMessage(`DevSquire: Failed to sync — ${err.message || err}`);
+      }
+    });
   }
 
   openWorktree(taskId: string, worktreeDir?: string): void {

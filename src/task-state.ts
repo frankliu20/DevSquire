@@ -50,7 +50,7 @@ export interface PendingDecision {
  * explicitly set the phase field.
  */
 const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
-  task_start: 'analyzing',
+  task_start: 'planned',
   analysis_done: 'exploring',
   exploration_done: 'planning',
   plan_approved: 'implementing',

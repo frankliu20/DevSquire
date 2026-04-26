@@ -879,11 +879,11 @@ function renderDecisions(list) {
         \${d.taskId ? '<button class="btn btn-pri" onclick="focusTerminal(\\''+d.taskId+'\\')">Take Action</button>' : ''}
         \${d.prUrl ? '<button class="btn-s btn-sec" onclick="openExternal(&quot;'+d.prUrl+'&quot;)">View PR</button>' : ''}
         \${d.prNumber ? '<button class="btn-s btn-sec" onclick="fixComments('+d.prNumber+')">Fix</button>' : ''}
-        <button class="btn-s btn-sec" onclick="dismissDecision('\${d.id}')">Dismiss</button>
+        <button class="btn-s btn-sec" onclick="dismissDecision('\${d.id}', '\${d.taskId || ''}')">Dismiss</button>
       </div>
     </div>\`).join('');
 }
-function dismissDecision(id) { vscode.postMessage({ type: 'dismissDecision', id }); }
+function dismissDecision(id, taskId) { vscode.postMessage({ type: 'dismissDecision', id, taskId }); }
 
 // ===== Skills =====
 function filterSkills(f) {
@@ -923,7 +923,7 @@ function runSkill(name) {
   vscode.postMessage({ type: 'runCommand', command: '/' + name }); toast('Running /' + name, 'info');
 }
 function isRunnableAgent(name) {
-  var runnable = ['squire-dev-issue', 'squire-watch-pr'];
+  var runnable = ['squire-watch-pr'];
   return runnable.indexOf(name) !== -1;
 }
 function promptRunAgent(name) {
