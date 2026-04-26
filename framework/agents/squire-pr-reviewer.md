@@ -128,7 +128,12 @@ gh api repos/$OWNER/$REPO_NAME/pulls/<number>/reviews \
 
 ## Step 2: Analyze and Present Review
 
-Present a structured review:
+**Before presenting the review, log completion:**
+```bash
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+```
+
+Then present a structured review:
 
 ```
 ## PR Review: #<N> — <title>
