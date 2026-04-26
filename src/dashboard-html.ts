@@ -292,9 +292,15 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 
 /* Progress pipeline */
 .pipeline { display: flex; gap: 2px; margin: var(--sp-2) 0; }
-.pipeline-step { flex: 1; height: 3px; border-radius: 2px; background: var(--input-bg); transition: background var(--t-normal); }
-.pipeline-step.done { background: var(--green); }
-.pipeline-step.active { background: var(--yellow); animation: pulse 1.5s infinite; }
+.pipeline-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pipeline-bar { width: 100%; height: 3px; border-radius: 2px; background: var(--input-bg); transition: background var(--t-normal); }
+.pipeline-step.done .pipeline-bar { background: var(--green); }
+.pipeline-step.active .pipeline-bar { background: var(--yellow); animation: pulse 1.5s infinite; }
+.pipeline-step.failed .pipeline-bar { background: var(--red); }
+.pipeline-label { font-size: 9px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.pipeline-step.done .pipeline-label { color: var(--green); }
+.pipeline-step.active .pipeline-label { color: var(--yellow); font-weight: 500; }
+.pipeline-step.failed .pipeline-label { color: var(--red); }
 
 /* ===== Event log ===== */
 .event-log {
@@ -774,15 +780,16 @@ function badgeFor(action) {
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
 const PHASES = ['analyzing','exploring','planning','implementing','testing','creating_pr','done','failed'];
+const PHASE_LABELS = { analyzing: 'Analyze', exploring: 'Explore', planning: 'Plan', implementing: 'Implement', testing: 'Build/Test', creating_pr: 'PR', done: 'Done' };
 function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
   c.innerHTML = list.map(t => {
     const phaseIdx = PHASES.indexOf(t.phase || 'planned');
     const phaseClass = t.phase === 'done' ? 'done' : t.phase === 'failed' ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
-    const pipeline = PHASES.slice(0, 7).map((_, i) => {
-      const cls = i < phaseIdx ? 'done' : i === phaseIdx && t.status === 'running' ? 'active' : '';
-      return '<div class="pipeline-step ' + cls + '"></div>';
+    const pipeline = PHASES.slice(0, 7).map((p, i) => {
+      const cls = t.phase === 'failed' && i === phaseIdx ? 'failed' : i < phaseIdx ? 'done' : i === phaseIdx && t.status === 'running' ? 'active' : i === phaseIdx && t.phase === 'done' ? 'done' : '';
+      return '<div class="pipeline-step ' + cls + '"><div class="pipeline-bar"></div><div class="pipeline-label">' + (PHASE_LABELS[p] || p) + '</div></div>';
     }).join('');
 
     const eventsHtml = t.events && expandedTask === t.id
@@ -795,7 +802,7 @@ function renderTasks(list) {
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
-        <span class="badge \${t.phase === 'done' ? 'badge-green' : t.phase === 'failed' ? 'badge-red' : t.status === 'orphan' ? 'badge-neutral' : 'badge-yellow'}">\${t.status === 'orphan' ? 'orphan' : (t.phase || t.status)}</span>
+        <span class="badge \${t.phase === 'done' ? 'badge-green' : t.phase === 'failed' ? 'badge-red' : t.status === 'orphan' ? 'badge-neutral' : 'badge-yellow'}">\${t.status === 'orphan' ? 'orphan' : (t.events && t.events.length ? esc(t.events[t.events.length - 1].message || t.events[t.events.length - 1].phase || t.phase || t.status) : (t.phase || t.status))}</span>
       </div>
       <div class="pipeline">\${pipeline}</div>
       <div class="task-meta">
