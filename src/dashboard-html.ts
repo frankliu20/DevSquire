@@ -805,7 +805,7 @@ function renderTasks(list) {
       <div class="task-actions">
         \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
         \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\')">Worktree</button>' : ''}
-        \${t.status === 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean orphan?\\',\\'Remove logs, decisions, and worktree for this orphan task.\\',()=>cleanupOrphan(\\''+t.id+'\\'))">Clean</button>' : ''}
+        \${t.status === 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();cleanupOrphan(\\''+t.id+'\\')">Clean</button>' : ''}
         \${t.status !== 'running' && t.status !== 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
         \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Send Ctrl+C to the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
       </div>
