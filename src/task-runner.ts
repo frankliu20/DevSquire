@@ -141,7 +141,8 @@ export class TaskRunner {
   async runReviewPR(prNumberOrUrl: number | string, config?: Partial<ReviewConfig>, prTitle?: string): Promise<TaskInfo> {
     const cfg = vscode.workspace.getConfiguration('devSquire');
     const strategy = config?.strategy || cfg.get<string>('reviewPR.strategy', 'normal') as ReviewConfig['strategy'];
-    const level = config?.level || cfg.get<string>('reviewPR.level', 'medium') as ReviewConfig['level'];
+    const defaultLevel = config?.isOwn ? 'low' : 'medium';
+    const level = config?.level || cfg.get<string>('reviewPR.level', defaultLevel) as ReviewConfig['level'];
 
     let prUrl: string;
     let prNumber: number | undefined;

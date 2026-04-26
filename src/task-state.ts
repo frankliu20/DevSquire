@@ -64,6 +64,8 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   branch_setup: 'planned',
   knowledge_capture: 'done',
   skill_captured: 'done',
+  pr_merged: 'done',
+  worktree_cleaned: 'done',
 };
 
 /**

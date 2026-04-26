@@ -287,6 +287,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         startedAt: logTask?.startedAt || new Date(rt.createdAt).toISOString(),
         events: logTask?.events || [],
         createdAt: rt.createdAt,
+        updatedAt: logTask?.updatedAt ? new Date(logTask.updatedAt).getTime() : rt.createdAt,
       };
     });
 
@@ -306,11 +307,12 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           startedAt: lt.startedAt,
           events: lt.events,
           createdAt: new Date(lt.startedAt).getTime(),
+          updatedAt: new Date(lt.updatedAt).getTime(),
         });
       }
     }
 
-    merged.sort((a, b) => b.createdAt - a.createdAt);
+    merged.sort((a, b) => b.updatedAt - a.updatedAt);
     this.post('tasks', merged);
   }
 

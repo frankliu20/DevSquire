@@ -605,7 +605,7 @@ function refreshIssues() {
 }
 let showBacklog = false;
 const defaultMode = '${defaultMode}';
-const BACKLOG_LABELS = ['backlog', 'icebox', 'wontfix', 'on-hold', 'deferred'];
+const BACKLOG_LABELS = ['backlog'];
 function isBacklog(i) { return i.labels.some(l => BACKLOG_LABELS.includes(l.toLowerCase())); }
 function toggleBacklog() { showBacklog = !showBacklog; filterIssues(); }
 function filterIssues() {
@@ -638,7 +638,7 @@ function issueTaskId(num) {
 }
 function phaseBadge(phase) {
   if (!phase) return '';
-  const map = { done: 'badge-green', failed: 'badge-red', orphan: 'badge-neutral', implementing: 'badge-yellow', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-blue', creating_pr: 'badge-purple' };
+  const map = { done: 'badge-green', failed: 'badge-red', orphan: 'badge-neutral', implementing: 'badge-blue', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-purple', creating_pr: 'badge-purple', planned: 'badge-neutral' };
   const cls = Object.entries(map).find(([k]) => phase.includes(k))?.[1] || 'badge-neutral';
   return '<span class="badge ' + cls + '">' + esc(phase) + '</span>';
 }
@@ -799,9 +799,9 @@ function badgeFor(action) {
   const map = {
     ready_to_merge: ['Ready', 'badge-green'],
     ci_failing: ['CI Fail', 'badge-red badge-pulse'],
-    review_pending: ['Review', 'badge-yellow'],
-    changes_requested: ['Changes', 'badge-red'],
-    has_unresolved_comments: ['Unresolved', 'badge-yellow'],
+    review_pending: ['Review pending', 'badge-yellow'],
+    changes_requested: ['Changes requested', 'badge-red'],
+    has_unresolved_comments: ['Unresolved comments', 'badge-yellow'],
     draft: ['Draft', 'badge-neutral'],
     waiting: ['Waiting', 'badge-neutral'],
     approved: ['Approved', 'badge-green'],
@@ -813,10 +813,10 @@ function badgeFor(action) {
 
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
-const PHASES = ['analyzing','exploring','planning','implementing','testing','creating_pr','done'];
-const PHASE_LABELS = { analyzing: 'Analyze', exploring: 'Explore', planning: 'Plan', implementing: 'Implement', testing: 'Build/Test', creating_pr: 'PR', done: 'Done' };
+const PHASES = ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'];
+const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done' };
 // Map internal phases to pipeline display phases
-const PHASE_MAP = { planned: 'analyzing', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed' };
+const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed' };
 function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
@@ -1018,7 +1018,10 @@ function renderEOD(r) {
         + r.commits.slice(0,10).map(c => '<div class="report-item"><span class="commit-hash">'+c.sha.substring(0,7)+'</span><span class="commit-msg">'+esc(c.message)+'</span></div>').join('')
         + '</div>' : ''}
       \${r.carryOver.length ? '<div class="report-section"><div class="report-section-title">📋 Carry Over ('+r.carryOver.length+')</div>'
-        + r.carryOver.map(i => '<div class="report-item">'+rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+'</span></div>').join('')
+        + r.carryOver.map(i => '<div class="report-item"'+(i.isBacklog?' style="opacity:0.5"':'')+'>'
+          +rIssue(i.number)+'<span class="report-item-title">'+esc(i.title)+'</span>'
+          +(i.isBacklog?'<span class="badge badge-neutral">backlog</span>':'')
+          +'</div>').join('')
         + '</div>' : ''}
     </div>
   \`;

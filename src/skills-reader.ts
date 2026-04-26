@@ -41,19 +41,31 @@ export class SkillsReader {
     if (!fs.existsSync(dirPath)) return [];
 
     const results: SkillInfo[] = [];
-    const files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.md'));
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const name = file.replace('.md', '');
-        const description = this.extractDescription(content);
-        const isPersonal = dirPath.includes(os.homedir());
-
-        results.push({ name, type, description, content, isPersonal, path: filePath });
-      } catch {
-        // Skip unreadable files
+    for (const entry of entries) {
+      // Flat file pattern: <name>.md
+      if (entry.isFile() && entry.name.endsWith('.md')) {
+        const filePath = path.join(dirPath, entry.name);
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const name = entry.name.replace('.md', '');
+          const description = this.extractDescription(content);
+          const isPersonal = dirPath.includes(os.homedir());
+          results.push({ name, type, description, content, isPersonal, path: filePath });
+        } catch { /* skip */ }
+      }
+      // Directory pattern: <name>/SKILL.md
+      if (entry.isDirectory()) {
+        const skillFile = path.join(dirPath, entry.name, 'SKILL.md');
+        if (fs.existsSync(skillFile)) {
+          try {
+            const content = fs.readFileSync(skillFile, 'utf-8');
+            const description = this.extractDescription(content);
+            const isPersonal = dirPath.includes(os.homedir());
+            results.push({ name: entry.name, type, description, content, isPersonal, path: skillFile });
+          } catch { /* skip */ }
+        }
       }
     }
 

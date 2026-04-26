@@ -12,7 +12,7 @@ export interface EODReport {
   mergedPRs: Array<{ number: number; title: string }>;
   openPRs: Array<{ number: number; title: string; action: string }>;
   commits: GitHubCommit[];
-  carryOver: Array<{ number: number; title: string }>;
+  carryOver: Array<{ number: number; title: string; isBacklog?: boolean }>;
 }
 
 export interface ScrumReport {
@@ -33,7 +33,7 @@ export class ReportGenerator {
     owner: string,
     repo: string,
   ) {
-    this.scrumMarkFile = path.join(squireDir, 'last-scrum.txt');
+    this.scrumMarkFile = path.join(squireDir, 'logs', 'scrum-mark.json');
     this.slug = `${owner}/${repo}`;
   }
 
@@ -79,7 +79,11 @@ export class ReportGenerator {
       mergedPRs,
       openPRs: myPRs.map((pr) => ({ number: pr.number, title: pr.title, action: pr.action || 'waiting' })),
       commits,
-      carryOver: myIssues.map((i) => ({ number: i.number, title: i.title })),
+      carryOver: myIssues.map((i) => ({
+        number: i.number,
+        title: i.title,
+        isBacklog: i.labels.some((l) => l.toLowerCase() === 'backlog'),
+      })).sort((a, b) => (a.isBacklog ? 1 : 0) - (b.isBacklog ? 1 : 0)),
     };
   }
 
@@ -127,10 +131,24 @@ export class ReportGenerator {
 
     // Ongoing & Blockers from open issues
     for (const issue of myIssues) {
-      if (issue.labels.some((l) => l.toLowerCase().includes('block'))) {
+      const isBlocked = issue.labels.some((l) => {
+        const lower = l.toLowerCase();
+        return lower === 'blocked' || lower === 'blocker';
+      });
+      if (isBlocked) {
         blockers.push({ number: issue.number, title: issue.title, reason: 'Blocked label' });
       } else {
         ongoing.push({ number: issue.number, title: issue.title });
+      }
+    }
+
+    // Also check PRs with CI failures or changes requested as blockers
+    const myPRs = this.ghData.listMyPRs();
+    for (const pr of myPRs) {
+      if (pr.action === 'ci_failing') {
+        blockers.push({ number: pr.number, title: pr.title, reason: 'CI failing' });
+      } else if (pr.action === 'changes_requested') {
+        blockers.push({ number: pr.number, title: pr.title, reason: 'Changes requested' });
       }
     }
 
@@ -139,17 +157,18 @@ export class ReportGenerator {
 
   /** Post scrum status to GitHub issues */
   postScrumToGitHub(report: ScrumReport): void {
-    // Aggregate and comment on each mentioned issue
+    const date = new Date().toISOString().split('T')[0];
     const allIssues = [...report.done, ...report.ongoing, ...report.blockers];
     for (const issue of allIssues) {
-      const status = report.done.find((d) => d.number === issue.number) ? '✅ Done'
-        : report.blockers.find((b) => b.number === issue.number) ? '🚫 Blocked'
-        : '🔄 In Progress';
+      const isDone = report.done.find((d) => d.number === issue.number);
+      const isBlocked = report.blockers.find((b) => b.number === issue.number);
+      const status = isDone ? '✅ Done' : isBlocked ? '🚫 Blocked' : '🔄 In Progress';
+      const prLink = isDone && (isDone as any).prUrl ? `\nPR: ${(isDone as any).prUrl}` : '';
 
-      const body = `**Scrum Update**: ${status}`;
+      const body = `${date} status update:\n[${status}] #${issue.number} ${issue.title}${prLink}`;
       try {
         cp.execSync(
-          `gh issue comment ${issue.number} --repo ${this.slug} --body "${body}"`,
+          `gh issue comment ${issue.number} --repo ${this.slug} --body "${body.replace(/"/g, '\\"')}"`,
           { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] },
         );
       } catch { /* ignore */ }
@@ -158,16 +177,24 @@ export class ReportGenerator {
 
   /** Mark scrum timestamp */
   markScrum(): void {
-    fs.writeFileSync(this.scrumMarkFile, new Date().toISOString());
+    const data = { timestamp: new Date().toISOString(), label: new Date().toLocaleString() };
+    fs.writeFileSync(this.scrumMarkFile, JSON.stringify(data));
   }
 
   /** Get last scrum mark */
   getLastScrumMark(): string {
     try {
-      return fs.readFileSync(this.scrumMarkFile, 'utf-8').trim();
+      const content = fs.readFileSync(this.scrumMarkFile, 'utf-8').trim();
+      // Support both JSON and plain text format
+      try {
+        const data = JSON.parse(content);
+        return data.timestamp;
+      } catch {
+        return content; // Legacy plain text format
+      }
     } catch {
-      // Default to start of today
-      return new Date().toISOString().split('T')[0] + 'T00:00:00.000Z';
+      // Default to 3 days ago
+      return new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     }
   }
 }

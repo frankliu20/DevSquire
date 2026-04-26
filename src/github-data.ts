@@ -113,22 +113,29 @@ export class GitHubData {
     ) || '';
   }
 
-  /** Fetch unresolved review thread counts via GraphQL */
+  /** Fetch unresolved review thread counts via batched GraphQL */
   getUnresolvedCounts(prNumbers: number[]): Map<number, number> {
     const result = new Map<number, number>();
-    for (const num of prNumbers) {
-      try {
-        const query = `query { repository(owner:"${this.owner}",name:"${this.repo}") { pullRequest(number:${num}) { reviewThreads(first:100) { nodes { isResolved } } } } }`;
-        const output = cp.execSync(`gh api graphql -f query='${query}'`, {
-          encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        const data = JSON.parse(output);
-        const threads = data?.data?.repository?.pullRequest?.reviewThreads?.nodes || [];
-        const unresolved = threads.filter((t: any) => !t.isResolved).length;
-        result.set(num, unresolved);
-      } catch {
-        result.set(num, 0);
-      }
+    if (!prNumbers.length) return result;
+
+    try {
+      // Batch all PRs into a single GraphQL query
+      const fields = prNumbers.map((num, i) =>
+        `pr${i}: pullRequest(number:${num}) { reviewThreads(first:100) { nodes { isResolved } } }`
+      ).join(' ');
+      const query = `query { repository(owner:"${this.owner}",name:"${this.repo}") { ${fields} } }`;
+      const output = cp.execSync(`gh api graphql -f query='${query}'`, {
+        encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      const data = JSON.parse(output);
+      const repo = data?.data?.repository || {};
+      prNumbers.forEach((num, i) => {
+        const threads = repo[`pr${i}`]?.reviewThreads?.nodes || [];
+        result.set(num, threads.filter((t: any) => !t.isResolved).length);
+      });
+    } catch {
+      // Fallback: set all to 0
+      for (const num of prNumbers) result.set(num, 0);
     }
     return result;
   }
