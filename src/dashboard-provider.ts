@@ -198,7 +198,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           iconPath: new vscode.ThemeIcon('debug-restart'),
         });
         resumeTerminal.show(false);
-        resumeTerminal.sendText(`claude --resume ${msg.aiSessionId}`, true);
+        resumeTerminal.sendText(`claude --resume "${msg.aiSessionId}"`, true);
         break;
       }
 
