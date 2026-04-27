@@ -7,7 +7,7 @@ import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
 import { SquireBackend } from './backend';
-import { detectAiSessions, AiSession } from './session-detector';
+import { detectAiSessions } from './session-detector';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command' | 'run-agent';
 
@@ -61,18 +61,15 @@ export class TaskRunner {
           // Skip for cyclic pipelines (watch-pr) — they don't have a terminal "done" state
           if (task.type !== 'watch-pr') {
             const taskLogId = task.taskLogId || `task-${task.id}`;
-            // Detect AI sessions (Claude / Copilot) before writing completion event
-            const cwd = task.worktreeDir || this.workspaceRoot;
-            const aiSessions = detectAiSessions(cwd, taskLogId);
             this.squireDir.logJson(taskLogId, {
               event: 'task_completed',
               phase: 'done',
               task_id: taskLogId,
               type: task.type,
-              ai_sessions: aiSessions.length > 0 ? aiSessions : undefined,
             });
-            // Write endedAt to global session index
-            this.updateSessionEndedAt(taskLogId);
+            // Write endedAt + detect AI sessions (fallback for 30s delayed detection)
+            const cwd = task.worktreeDir || this.workspaceRoot;
+            this.updateSessionIndex(taskLogId, cwd, true);
           }
           task.terminal = undefined;
           this._onTasksChanged.fire();
@@ -522,6 +519,13 @@ export class TaskRunner {
 
     taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
+
+    // Delayed AI session detection (30s after launch — session files need time to appear)
+    const delayedTaskLogId = taskInfo.taskLogId || `task-${taskInfo.id}`;
+    const delayedCwd = cwd;
+    setTimeout(() => {
+      this.updateSessionIndex(delayedTaskLogId, delayedCwd, false);
+    }, 30_000);
   }
 
   private formatDevLabel(mode: string, issueNum: string | null, title?: string, rawInput?: string): string {
@@ -542,10 +546,11 @@ export class TaskRunner {
   }
 
   /**
-   * Write endedAt timestamp to the global session index (~/.squire/sessions/index.json).
-   * Finds the latest session for this taskLogId under the current repo slug and stamps it.
+   * Update the global session index (~/.squire/sessions/index.json).
+   * Detects AI sessions and optionally writes endedAt.
+   * @param writeEndedAt - true when called on terminal close, false for 30s delayed detection
    */
-  private updateSessionEndedAt(taskLogId: string): void {
+  private updateSessionIndex(taskLogId: string, cwd: string, writeEndedAt: boolean): void {
     const indexPath = path.join(os.homedir(), '.squire', 'sessions', 'index.json');
     try {
       if (!fs.existsSync(indexPath)) return;
@@ -555,8 +560,24 @@ export class TaskRunner {
       if (!taskEntry?.sessions?.length) return;
 
       const latest = taskEntry.sessions[taskEntry.sessions.length - 1];
-      if (!latest.endedAt) {
+      let changed = false;
+
+      // Detect AI sessions if not already set
+      if (!latest.aiSessions || latest.aiSessions.length === 0) {
+        const aiSessions = detectAiSessions(cwd, taskLogId);
+        if (aiSessions.length > 0) {
+          latest.aiSessions = aiSessions;
+          changed = true;
+        }
+      }
+
+      // Write endedAt on terminal close
+      if (writeEndedAt && !latest.endedAt) {
         latest.endedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+        changed = true;
+      }
+
+      if (changed) {
         fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
       }
     } catch {

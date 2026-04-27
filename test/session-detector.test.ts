@@ -1,33 +1,9 @@
 import { describe, it, expect } from 'vitest';
-
-// --- Extracted logic from session-detector.ts for unit testing ---
-
-function parseClaudeSessionFile(content: string, cwd: string): string | null {
-  try {
-    const data = JSON.parse(content);
-    if (!data.sessionId || !data.cwd) return null;
-    const normalizedCwd = cwd.replace(/\\/g, '/').toLowerCase();
-    const normalizedSessionCwd = String(data.cwd).replace(/\\/g, '/').toLowerCase();
-    if (normalizedSessionCwd === normalizedCwd) {
-      return data.sessionId;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function parseCopilotWorkspaceYaml(content: string): string | null {
-  for (const line of content.split('\n')) {
-    const match = line.match(/^id:\s*(.+)$/);
-    if (match) return match[1].trim();
-  }
-  return null;
-}
-
-function copilotEventsMatchTaskLogId(content: string, taskLogId: string): boolean {
-  return content.includes(taskLogId);
-}
+import {
+  parseClaudeSessionFile,
+  parseCopilotWorkspaceYaml,
+  copilotEventsMatchTaskLogId,
+} from '../src/session-detector';
 
 // --- Tests ---
 
