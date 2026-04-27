@@ -7,6 +7,7 @@ import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
 import { SquireBackend } from './backend';
+import { detectAiSessions, AiSession } from './session-detector';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command' | 'run-agent';
 
@@ -60,11 +61,15 @@ export class TaskRunner {
           // Skip for cyclic pipelines (watch-pr) — they don't have a terminal "done" state
           if (task.type !== 'watch-pr') {
             const taskLogId = task.taskLogId || `task-${task.id}`;
+            // Detect AI sessions (Claude / Copilot) before writing completion event
+            const cwd = task.worktreeDir || this.workspaceRoot;
+            const aiSessions = detectAiSessions(cwd, taskLogId);
             this.squireDir.logJson(taskLogId, {
               event: 'task_completed',
               phase: 'done',
               task_id: taskLogId,
               type: task.type,
+              ai_sessions: aiSessions.length > 0 ? aiSessions : undefined,
             });
             // Write endedAt to global session index
             this.updateSessionEndedAt(taskLogId);

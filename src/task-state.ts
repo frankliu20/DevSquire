@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import type { AiSession } from './session-detector';
 
 /** Task phases matching the DevSquire pipeline */
 export type TaskPhase =
@@ -45,6 +46,7 @@ export interface TaskState {
   prNumber?: number;
   prUrl?: string;
   worktreeDir?: string;
+  aiSessions?: AiSession[];
   startedAt: string;
   updatedAt: string;
   events: TaskEvent[];
@@ -160,6 +162,7 @@ export class TaskStateReader {
       let issueNumber: number | undefined;
       let issueUrl: string | undefined;
       let worktreeDir: string | undefined;
+      let aiSessions: AiSession[] | undefined;
       let startedAt = '';
       let updatedAt = '';
 
@@ -181,6 +184,9 @@ export class TaskStateReader {
           if (entry.issue_number) issueNumber = entry.issue_number;
           if (entry.issue_url) issueUrl = entry.issue_url;
           if (entry.worktree_dir) worktreeDir = entry.worktree_dir;
+          if (entry.ai_sessions && Array.isArray(entry.ai_sessions)) {
+            aiSessions = entry.ai_sessions;
+          }
 
           events.push({
             timestamp: entry.timestamp,
@@ -202,6 +208,7 @@ export class TaskStateReader {
         prNumber,
         prUrl,
         worktreeDir,
+        aiSessions,
         startedAt,
         updatedAt,
         events,
