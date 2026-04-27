@@ -364,6 +364,21 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 .session-status.ended { color: var(--fg-muted); }
 .session-actions { margin-left: auto; flex-shrink: 0; }
 
+/* ===== Historical sessions ===== */
+.history-header {
+  display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-4);
+  padding-bottom: var(--sp-1); border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg-muted); font-size: var(--text-xs);
+}
+.history-card {
+  border: 1px dashed var(--border-subtle); border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3); margin-top: var(--sp-2);
+  background: var(--bg-surface); opacity: 0.85;
+}
+.history-card:hover { opacity: 1; border-color: var(--fg-muted); }
+.history-card .task-label { color: var(--fg); }
+.history-card .task-meta { font-size: var(--text-xs); color: var(--fg-muted); margin-top: var(--sp-1); }
+
 /* ===== Action card ===== */
 .action-card {
   border: 1px solid var(--border-subtle); border-radius: var(--r-md);
@@ -561,8 +576,10 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
   <div class="pad">
     <div class="row mb8">
       <button class="btn-s btn-sec" onclick="refreshTasks()">↻ Refresh</button>
+      <button class="btn-s btn-sec" onclick="loadHistory()" id="historyBtn">📂 History</button>
     </div>
     <div id="taskList"><div class="empty" data-icon="⚙️">No active tasks</div></div>
+    <div id="historyList"></div>
   </div>
 </div>
 
@@ -629,6 +646,7 @@ let issues = [], prs = { mine: [], review: [] }, tasks = [], decisions = [], ski
 let currentTab = 'issues', prFilter = 'mine', reportView = 'eod', skillFilter = 'all';
 let expandedIssue = null, expandedTask = null, expandedSkill = null, expandedPR = null, expandedSessions = null;
 let expandedGroups = {}; // track collapsed groups
+let historyTasks = [];
 let confirmCallback = null;
 let issuesLoaded = false, prsLoaded = false;
 let myPRSubFilter = 'all'; // 'all' | 'ready'
@@ -863,6 +881,10 @@ function badgeFor(action) {
 
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
+function loadHistory() {
+  document.getElementById('historyBtn').textContent = '📂 Loading...';
+  vscode.postMessage({ type: 'loadHistory' });
+}
 const PHASES = ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'];
 const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done', reviewing: 'Reviewing', reviewed: 'Reviewed', published: 'Published', monitoring: 'Monitor', fixing_ci: 'Fix CI', fixing_comments: 'Fix Comments' };
 // Map internal phases to pipeline display phases
@@ -952,7 +974,13 @@ function renderTasks(list) {
     if (sortedIssues.length || sortedPRs.length) {
       html += '<div class="task-section-header"><span class="section-icon">📦</span> Adhoc</div>';
     }
-    html += otherTasks.map(renderTaskCard).join('');
+    // Wrap adhoc tasks in a collapsible group
+    var adhocOpen = expandedGroups['adhoc'] !== false;
+    html += '<details class="task-group" ' + (adhocOpen ? 'open' : '') + ' ontoggle="onGroupToggle(this,\\'adhoc\\')">'
+      + '<summary><span class="task-group-title">Adhoc Tasks</span><span class="task-group-meta">' + otherTasks.length + ' task' + (otherTasks.length > 1 ? 's' : '') + '</span>'
+      + groupStatusBadge(otherTasks) + '</summary>'
+      + '<div class="task-group-cards">' + otherTasks.map(function(t) { t._inGroup = true; return renderTaskCard(t); }).join('') + '</div>'
+      + '</details>';
   }
 
   c.innerHTML = html;
@@ -1058,6 +1086,27 @@ function renderTaskCard(t) {
       if (resumable) break;
     }
 
+    // ===== Action buttons (logic separated from display) =====
+    var isLive = t.hasTerminal && t.status === 'running';   // agent actively running in a terminal
+    var isStopped = !t.hasTerminal;                          // no terminal — stopped, closed, or log-only
+    var isDone = t.phase === 'done' || t.phase === 'failed';
+    var canResume = isStopped && !!resumable;
+    var canRerun = isStopped && !resumable && !!t.issueUrl && !isDone;
+    var canDismiss = !isLive;
+    var canClean = !isLive;
+    var canStop = isLive;
+    var canFocus = !!t.hasTerminal;
+    var canWorktree = !!t.worktreeDir && isLive;
+
+    var actions = [];
+    if (canFocus)    actions.push('<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>');
+    if (canWorktree) actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>');
+    if (canDismiss)  actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')\" title=\"Hide from dashboard (keeps worktree and logs)\">Dismiss</button>');
+    if (canClean)    actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))\" title=\"Remove worktree, branch, and logs permanently\">Clean</button>');
+    if (canResume)   actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\''+t.id+'\\',\\''+resumable.id+'\\',\\''+(t.worktreeDir||'').replace(/\\\\/g,'/')+'\\')">▶ Resume</button>');
+    if (canRerun)    actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();rerunIssue(\\''+esc(t.issueUrl)+'\\',\\''+esc(t.label || '')+'\\')">▶ Re-run</button>');
+    if (canStop)     actions.push('<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>');
+
     return \`
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
@@ -1069,14 +1118,7 @@ function renderTaskCard(t) {
         \${t.branch ? t.branch + ' · ' : ''}\${t.prNumber ? 'PR #' + t.prNumber + ' · ' : ''}\${shortTime(t.startedAt)}
         \${t.status === 'running' ? ' · ' + duration(t.startedAt) : ''}
       </div>
-      <div class="task-actions">
-        \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
-        \${t.worktreeDir && t.status === 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>' : ''}
-        \${!t.hasTerminal || t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')\" title=\"Hide from dashboard (keeps worktree and logs)\">Dismiss</button>' : ''}
-        \${!t.hasTerminal || t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))\" title=\"Remove worktree, branch, and logs permanently\">Clean</button>' : ''}
-        \${!t.hasTerminal && resumable ? '<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\''+t.id+'\\',\\''+resumable.id+'\\',\\''+(t.worktreeDir||'').replace(/\\\\/g,'/')+'\\')">▶ Resume</button>' : ''}
-        \${t.status === 'running' && t.hasTerminal ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal and mark completed.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>' : ''}
-      </div>
+      <div class="task-actions">\${actions.join('')}</div>
       \${eventsHtml}
       \${sessionsHtml}
     </div>\`;
@@ -1085,6 +1127,30 @@ function toggleTaskEvents(id) { expandedTask = expandedTask === id ? null : id; 
 function stopTask(id) { vscode.postMessage({ type: 'stopTask', taskId: id }); }
 function dismissTask(id) { vscode.postMessage({ type: 'dismissTask', taskId: id }); }
 function cleanupTask(id) { vscode.postMessage({ type: 'cleanupTask', taskId: id }); }
+
+function renderHistory(list) {
+  var c = document.getElementById('historyList');
+  document.getElementById('historyBtn').textContent = '📂 History';
+  if (!list.length) { c.innerHTML = ''; return; }
+  // Filter out tasks already shown in active tasks
+  var activeIds = new Set(tasks.map(function(t) { return t.taskLogId || t.id; }));
+  var filtered = list.filter(function(h) { return !activeIds.has(h.taskLogId); });
+  if (!filtered.length) { c.innerHTML = '<div class="empty" data-icon="📂">No previous sessions for open issues</div>'; return; }
+  var html = '<div class="history-header"><span>🕐</span> Previous Sessions (open issues)</div>';
+  html += filtered.map(function(h) {
+    var resumeBtn = '';
+    if (h.resumableSessionId) {
+      resumeBtn = '<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\'' + esc(h.taskLogId) + '\\',\\'' + esc(h.resumableSessionId) + '\\',\\'' + esc(h.worktreeDir || '') + '\\')">▶ Resume</button>';
+    }
+    return '<div class="history-card">'
+      + '<div class="task-header"><span class="task-label">' + esc(h.label) + '</span></div>'
+      + '<div class="task-meta">' + (h.lastSessionTime ? shortTime(h.lastSessionTime) : '') + ' · ' + h.sessionCount + ' session' + (h.sessionCount > 1 ? 's' : '') + '</div>'
+      + '<div class="task-actions">' + resumeBtn + '</div>'
+      + '</div>';
+  }).join('');
+  c.innerHTML = html;
+}
+
 function cleanAll() { vscode.postMessage({ type: 'cleanAll' }); }
 function syncMain() { vscode.postMessage({ type: 'syncMain' }); }
 function offWork() {
@@ -1124,6 +1190,7 @@ function openWorktree(id, dir) { vscode.postMessage({ type: 'openWorktree', task
 function focusTerminal(id) { vscode.postMessage({ type: 'focusTerminal', taskId: id }); }
 function toggleSessions(id) { expandedSessions = expandedSessions === id ? null : id; renderTasks(tasks); }
 function resumeSession(taskId, aiSessionId, worktreeDir) { vscode.postMessage({ type: 'resumeSession', taskId: taskId, aiSessionId: aiSessionId, worktreeDir: worktreeDir }); }
+function rerunIssue(issueUrl, title) { vscode.postMessage({ type: 'devIssue', issueUrl: issueUrl, mode: 'auto', title: title }); }
 
 // ===== Actions (Decisions) =====
 function renderDecisions(list) {
@@ -1349,6 +1416,10 @@ window.addEventListener('message', e => {
       document.getElementById('statTasks').textContent = tasks.filter(t => t.status === 'running').length;
       renderTasks(tasks);
       if (issuesLoaded) filterIssues(); // refresh issue phase badges
+      break;
+    case 'historySessions':
+      historyTasks = msg.data || [];
+      renderHistory(historyTasks);
       break;
     case 'decisions':
       decisions = msg.data;

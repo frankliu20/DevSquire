@@ -7,7 +7,7 @@ import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
 import { SquireBackend } from './backend';
-import { detectAiSessions } from './session-detector';
+import { SessionEvent, SessionIndexManager } from './session-index-manager';
 
 export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' | 'run-command' | 'run-agent';
 
@@ -46,6 +46,9 @@ export class TaskRunner {
   private _onTasksChanged = new vscode.EventEmitter<void>();
   readonly onTasksChanged = this._onTasksChanged.event;
 
+  private _onSessionEvent = new vscode.EventEmitter<SessionEvent>();
+  readonly onSessionEvent = this._onSessionEvent.event;
+
   constructor(
     private worktree: WorktreeManager,
     private workspaceRoot: string,
@@ -73,9 +76,15 @@ export class TaskRunner {
               type: task.type,
             });
             const cwd = task.worktreeDir || this.workspaceRoot;
-            this.updateSessionIndex(taskLogId, cwd, true);
+            this._onSessionEvent.fire({
+              type: 'session_ended',
+              repoSlug: this.repoSlug,
+              taskLogId,
+              cwd,
+            });
           }
           task.terminal = undefined;
+          task.status = 'completed'; // No longer running — allows re-run without "already running" warning
           this._onTasksChanged.fire();
           this.squireDir.log('extension', `Task ${task.id} (${task.label}) terminal closed`);
         }
@@ -329,26 +338,63 @@ export class TaskRunner {
     return undefined;
   }
 
+  /** Resume a Claude AI session: create terminal with `claude --resume`, bind it back to the task */
+  resumeSession(taskId: string, aiSessionId: string, worktreeDir?: string): void {
+    const cwd = worktreeDir || this.workspaceRoot;
+    const terminal = vscode.window.createTerminal({
+      name: `Resume: ${aiSessionId.slice(0, 8)}`,
+      cwd,
+      iconPath: new vscode.ThemeIcon('debug-restart'),
+    });
+    terminal.show(false);
+    terminal.sendText(`claude --resume "${aiSessionId}"`, true);
+
+    // Bind terminal back to existing task so it shows as running
+    const found = this.findTask(taskId);
+    if (found) {
+      const task = found[1];
+      task.terminal = terminal;
+      task.status = 'running';
+      this._onTasksChanged.fire();
+
+      // Fire session_created for the resumed session
+      const sessionId = SessionIndexManager.generateSessionId();
+      this._onSessionEvent.fire({
+        type: 'session_created',
+        repoSlug: this.repoSlug,
+        taskLogId: task.taskLogId || `task-${task.id}`,
+        sessionId,
+        cwd,
+      });
+    }
+  }
+
   /** Stop a running task: close terminal, mark completed */
   stopTask(taskId: string): void {
     const found = this.findTask(taskId);
     if (found?.[1]?.terminal) {
       const task = found[1];
-      task.terminal.dispose();
-      task.status = 'completed';
-      // Write completion event to JSONL + update session index
+      const terminal = task.terminal;
+      // Clear reference first so onDidCloseTerminal won't double-process
+      task.terminal = undefined;
+      terminal.dispose();
+      // Don't mark as completed — the issue isn't done, user just stopped the agent
       if (task.type !== 'watch-pr') {
         const taskLogId = task.taskLogId || `task-${task.id}`;
         this.squireDir.logJson(taskLogId, {
-          event: 'task_completed',
-          phase: 'done',
+          event: 'task_stopped',
+          phase: 'paused',
           task_id: taskLogId,
           type: task.type,
         });
         const cwd = task.worktreeDir || this.workspaceRoot;
-        this.updateSessionIndex(taskLogId, cwd, true);
+        this._onSessionEvent.fire({
+          type: 'session_ended',
+          repoSlug: this.repoSlug,
+          taskLogId,
+          cwd,
+        });
       }
-      task.terminal = undefined;
       this._onTasksChanged.fire();
       this.squireDir.log('extension', `Task ${taskId} stopped by user`);
     }
@@ -361,6 +407,8 @@ export class TaskRunner {
       const [runtimeId] = found;
       this.tasks.delete(runtimeId);
     }
+    // Write dismissed event to JSONL so log-only tasks are also hidden
+    this.squireDir.logJson(taskId, { event: 'task_dismissed' });
     this._onTasksChanged.fire();
     this.squireDir.log('extension', `Task ${taskId} dismissed`);
   }
@@ -556,12 +604,15 @@ export class TaskRunner {
     taskInfo.terminal = terminal;
     this._onTasksChanged.fire();
 
-    // Delayed AI session detection (30s after launch — session files need time to appear)
-    const delayedTaskLogId = taskInfo.taskLogId || `task-${taskInfo.id}`;
-    const delayedCwd = cwd;
-    setTimeout(() => {
-      this.updateSessionIndex(delayedTaskLogId, delayedCwd, false);
-    }, 30_000);
+    // Fire session_created event — SessionIndexManager handles the index write
+    const sessionId = SessionIndexManager.generateSessionId();
+    this._onSessionEvent.fire({
+      type: 'session_created',
+      repoSlug: this.repoSlug,
+      taskLogId: taskInfo.taskLogId || `task-${taskInfo.id}`,
+      sessionId,
+      cwd,
+    });
   }
 
   private formatDevLabel(mode: string, issueNum: string | null, title?: string, rawInput?: string): string {
@@ -581,43 +632,4 @@ export class TaskRunner {
     return null;
   }
 
-  /**
-   * Update the global session index (~/.squire/sessions/index.json).
-   * Detects AI sessions and optionally writes endedAt.
-   * @param writeEndedAt - true when called on terminal close, false for 30s delayed detection
-   */
-  private updateSessionIndex(taskLogId: string, cwd: string, writeEndedAt: boolean): void {
-    const indexPath = path.join(os.homedir(), '.squire', 'sessions', 'index.json');
-    try {
-      if (!fs.existsSync(indexPath)) return;
-      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
-      const repoSlug = this.repoSlug;
-      const taskEntry = index[repoSlug]?.[taskLogId];
-      if (!taskEntry?.sessions?.length) return;
-
-      const latest = taskEntry.sessions[taskEntry.sessions.length - 1];
-      let changed = false;
-
-      // Detect AI sessions if not already set
-      if (!latest.aiSessions || latest.aiSessions.length === 0) {
-        const aiSessions = detectAiSessions(cwd, taskLogId);
-        if (aiSessions.length > 0) {
-          latest.aiSessions = aiSessions;
-          changed = true;
-        }
-      }
-
-      // Write endedAt on terminal close
-      if (writeEndedAt && !latest.endedAt) {
-        latest.endedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-        changed = true;
-      }
-
-      if (changed) {
-        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
-      }
-    } catch {
-      // Non-critical — don't block terminal close
-    }
-  }
 }

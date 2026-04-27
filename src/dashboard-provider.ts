@@ -10,6 +10,7 @@ import { TaskStateReader, defaultRunningPhase } from './task-state';
 import { SkillsReader } from './skills-reader';
 import { ReportGenerator } from './report';
 import { getDashboardHtml } from './dashboard-html';
+import { SessionIndexManager } from './session-index-manager';
 
 /** A single session entry from the global session index */
 export interface SessionEntry {
@@ -33,6 +34,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     private readonly taskStateReader: TaskStateReader,
     private readonly skillsReader: SkillsReader,
     private readonly reportGenerator: ReportGenerator,
+    private readonly sessionIndexManager: SessionIndexManager,
   ) {
     this.taskRunner.onTasksChanged(() => this.sendTasks());
   }
@@ -66,9 +68,8 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   private setupFileWatchers(): void {
     const logsDir = this.squireDir.logsDir;
     const decisionsDir = this.squireDir.decisionsDir;
-    const sessionsDir = path.join(os.homedir(), '.squire', 'sessions');
 
-    for (const dir of [logsDir, decisionsDir, sessionsDir]) {
+    for (const dir of [logsDir, decisionsDir]) {
       try {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const watcher = fs.watch(dir, () => {
@@ -169,6 +170,10 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.sendTasks();
         break;
       }
+      case 'loadHistory': {
+        setImmediate(() => this.sendHistorySessions());
+        break;
+      }
       case 'cleanupTask': {
         this.taskRunner.cleanTask(msg.taskId);
         this.sendTasks();
@@ -192,15 +197,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         break;
       }
       case 'resumeSession': {
-        // Resume a Claude AI session in a new terminal: claude --resume <aiSessionId>
-        const resumeCwd = msg.worktreeDir || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
-        const resumeTerminal = vscode.window.createTerminal({
-          name: `Resume: ${msg.aiSessionId?.slice(0, 8) || 'session'}`,
-          cwd: resumeCwd,
-          iconPath: new vscode.ThemeIcon('debug-restart'),
-        });
-        resumeTerminal.show(false);
-        resumeTerminal.sendText(`claude --resume "${msg.aiSessionId}"`, true);
+        this.taskRunner.resumeSession(msg.taskId, msg.aiSessionId, msg.worktreeDir);
         break;
       }
 
@@ -330,8 +327,11 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       if (!claimedLogIds.has(lt.id) && !merged.find((m) => m.id === lt.id)) {
         merged.push({
           id: lt.id,
-          label: lt.issueNumber ? `Issue #${lt.issueNumber}` : lt.id,
-          type: 'dev-issue' as const,
+          label: lt.issueNumber ? `Issue #${lt.issueNumber}` : lt.prNumber ? `PR #${lt.prNumber}` : lt.id,
+          type: (lt.id.startsWith('task-review-') ? 'review-pr'
+            : lt.id.startsWith('task-fix-') ? 'fix-comments'
+            : lt.id.startsWith('task-watch-') ? 'watch-pr'
+            : 'dev-issue') as const,
           status: lt.phase === 'done' ? 'completed' as const : lt.phase === 'failed' ? 'failed' as const : 'completed' as const,
           phase: lt.phase,
           branch: lt.branch,
@@ -354,20 +354,16 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Read the global session index (~/.squire/sessions/index.json)
+   * Read the global session index via SessionIndexManager
    * and return a map of taskLogId → SessionEntry[] for the current repo.
    */
   private readGlobalSessionIndex(): Record<string, SessionEntry[]> {
-    const indexPath = path.join(os.homedir(), '.squire', 'sessions', 'index.json');
     try {
-      if (!fs.existsSync(indexPath)) return {};
-      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
-      const repoSlug = this.repoInfo.slug;
-      const repoEntry = index[repoSlug];
-      if (!repoEntry) return {};
+      const repoSlug = `${this.repoInfo.owner}/${this.repoInfo.repo}`;
+      const repoData = this.sessionIndexManager.readRepoSessions(repoSlug);
       const result: Record<string, SessionEntry[]> = {};
-      for (const [taskLogId, taskEntry] of Object.entries(repoEntry)) {
-        const sessions = (taskEntry as any)?.sessions;
+      for (const [taskLogId, taskEntry] of Object.entries(repoData)) {
+        const sessions = taskEntry?.sessions;
         if (Array.isArray(sessions) && sessions.length > 0) {
           result[taskLogId] = sessions;
         }
@@ -375,6 +371,79 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       return result;
     } catch {
       return {};
+    }
+  }
+
+  /**
+   * Load historical sessions for open issues from the global session index.
+   * Returns session summaries filtered to only issues that are currently open.
+   */
+  private sendHistorySessions(): void {
+    try {
+      const repoSlug = `${this.repoInfo.owner}/${this.repoInfo.repo}`;
+      const repoEntry = this.sessionIndexManager.readRepoSessions(repoSlug);
+      if (!Object.keys(repoEntry).length) {
+        this.post('historySessions', []);
+        return;
+      }
+
+      // Get open issues to filter against
+      const openIssues = this.ghData.listMyIssues();
+      const openIssueNums = new Set(openIssues.map((i: any) => i.number));
+
+      const results: Array<{
+        taskLogId: string;
+        issueNumber: number;
+        label: string;
+        sessionCount: number;
+        lastSessionTime: string;
+        resumableSessionId: string | null;
+        worktreeDir: string;
+      }> = [];
+
+      for (const [taskLogId, taskEntry] of Object.entries(repoEntry)) {
+        // Extract issue number from taskLogId like "task-issue-38"
+        const issueMatch = taskLogId.match(/task-issue-(\d+)/);
+        if (!issueMatch) continue;
+        const issueNum = parseInt(issueMatch[1]);
+        if (!openIssueNums.has(issueNum)) continue;
+
+        const sessions = (taskEntry as any)?.sessions;
+        if (!Array.isArray(sessions) || sessions.length === 0) continue;
+
+        // Find the matching open issue for the label
+        const issue = openIssues.find((i: any) => i.number === issueNum);
+        const label = issue ? `Issue #${issueNum} ${issue.title}` : `Issue #${issueNum}`;
+
+        // Find last resumable AI session
+        let resumableSessionId: string | null = null;
+        for (let i = sessions.length - 1; i >= 0; i--) {
+          const aiSessions = sessions[i].aiSessions;
+          if (aiSessions) {
+            for (const ai of aiSessions) {
+              if (ai.resumable) { resumableSessionId = ai.id; break; }
+            }
+          }
+          if (resumableSessionId) break;
+        }
+
+        const lastSession = sessions[sessions.length - 1];
+        results.push({
+          taskLogId,
+          issueNumber: issueNum,
+          label,
+          sessionCount: sessions.length,
+          lastSessionTime: lastSession.endedAt || lastSession.startedAt || '',
+          resumableSessionId,
+          worktreeDir: '',
+        });
+      }
+
+      // Sort by last session time, newest first
+      results.sort((a, b) => b.lastSessionTime.localeCompare(a.lastSessionTime));
+      this.post('historySessions', results);
+    } catch {
+      this.post('historySessions', []);
     }
   }
 

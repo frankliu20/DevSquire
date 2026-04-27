@@ -10,6 +10,7 @@ import { GitHubData } from './github-data';
 import { TaskStateReader } from './task-state';
 import { SkillsReader } from './skills-reader';
 import { ReportGenerator } from './report';
+import { SessionIndexManager } from './session-index-manager';
 
 let dashboardProvider: DashboardViewProvider;
 
@@ -42,6 +43,11 @@ export async function activate(context: vscode.ExtensionContext) {
   const ghData = new GitHubData(repoInfo.owner, repoInfo.repo);
   const worktree = new WorktreeManager();
   const taskRunner = new TaskRunner(worktree, workspaceRoot, repoInfo, squireDir, backend);
+
+  // Session index manager — listens to task lifecycle events and maintains ~/.squire/sessions/index.json
+  const sessionIndexManager = new SessionIndexManager();
+  taskRunner.onSessionEvent((event) => sessionIndexManager.handleEvent(event));
+
   const taskStateReader = new TaskStateReader(squireDir.dir);
   const skillsReader = new SkillsReader(backend);
   const reportGenerator = new ReportGenerator(ghData, squireDir.dir, workspaceRoot, repoInfo.owner, repoInfo.repo);
@@ -55,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext) {
     taskStateReader,
     skillsReader,
     reportGenerator,
+    sessionIndexManager,
   );
 
   context.subscriptions.push(

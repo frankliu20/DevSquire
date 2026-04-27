@@ -50,24 +50,33 @@ export function copilotEventsMatchTaskLogId(content: string, taskLogId: string):
 }
 
 /**
- * Detect Claude AI sessions by scanning ~/.claude/sessions/*.json
- * and matching by working directory.
+ * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/
+ * for session JSONL files. The filename (minus .jsonl) is the session ID.
+ *
+ * Claude encodes the cwd into a directory name by replacing : \ / . with -
  */
 export function detectClaudeSession(cwd: string): AiSession | null {
-  const sessionsDir = path.join(os.homedir(), '.claude', 'sessions');
   try {
-    if (!fs.existsSync(sessionsDir)) return null;
-    const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+    const encodedCwd = cwd.replace(/[:\\/\.]/g, '-');
+    const projectDir = path.join(os.homedir(), '.claude', 'projects', encodedCwd);
+    if (!fs.existsSync(projectDir)) return null;
 
-    // Check files newest-first (highest PID or newest mtime likely most relevant)
-    for (const file of files.reverse()) {
-      const content = fs.readFileSync(path.join(sessionsDir, file), 'utf-8');
-      const sessionId = parseClaudeSessionFile(content, cwd);
-      if (sessionId) {
-        return { source: 'claude', id: sessionId, resumable: true };
+    const jsonlFiles = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
+    if (jsonlFiles.length === 0) return null;
+
+    // Pick the most recently modified .jsonl — that's the latest session
+    let bestFile = '';
+    let bestMtime = 0;
+    for (const file of jsonlFiles) {
+      const stat = fs.statSync(path.join(projectDir, file));
+      if (stat.mtimeMs > bestMtime) {
+        bestMtime = stat.mtimeMs;
+        bestFile = file;
       }
     }
-    return null;
+
+    const sessionId = bestFile.replace('.jsonl', '');
+    return { source: 'claude', id: sessionId, resumable: true };
   } catch {
     return null;
   }
