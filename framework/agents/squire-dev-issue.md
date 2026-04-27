@@ -62,37 +62,28 @@ Use the `sq.mjs` helper — it handles timestamps, JSON format, and writes to th
 
 ```bash
 # Shorthand: SQ="node $SQUIRE_DIR/bin/sq.mjs"
-# All commands use: node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" <event-type> <detail> [--branch X] [--pr N] [--pr-url U] [--session-id $DSQ_SESSION]
+# All commands use: node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" <event-type> <detail> [--branch X] [--pr N] [--pr-url U]
 
 # Run IMMEDIATELY when you start, before any other work:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" task_start "Starting issue analysis" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" task_start "Starting issue analysis" --branch "$BRANCH"
 # Phase 1 done — issue understood:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" analysis_done "Issue analyzed" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" analysis_done "Issue analyzed" --branch "$BRANCH"
 # Phase 2 done — code explored:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" exploration_done "Code explored" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" exploration_done "Code explored" --branch "$BRANCH"
 # Phase 3 done — plan approved:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" plan_approved "Plan approved" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" plan_approved "Plan approved" --branch "$BRANCH"
 # Phase 4 done — code written:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" implementation_done "Implementation complete" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" implementation_done "Implementation complete" --branch "$BRANCH"
 # Phase 5 — tests passed:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" test_pass "Tests passed" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" test_pass "Tests passed" --branch "$BRANCH"
 # Phase 5 — tests failed:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" test_fail "<error summary>" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" test_fail "<error summary>" --branch "$BRANCH"
 # Phase 6 — PR created:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" pr_created "PR created" --branch "$BRANCH" --pr $PR_NUM --session-id "$DSQ_SESSION"
-
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" pr_created "PR created" --branch "$BRANCH" --pr $PR_NUM
 # Blocked:
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" blocked "<reason>" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-```
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" blocked "<reason>" --branch "$BRANCH"```
 
-Replace `$TASK_LOG_ID`, `$SQUIRE_DIR`, `$BRANCH`, `$PR_NUM`, `$DSQ_SESSION` with actual values. **Do not skip any of these logs.**
+Replace `$TASK_LOG_ID`, `$SQUIRE_DIR`, `$BRANCH`, `$PR_NUM` with actual values. **Do not skip any of these logs.**
 
 ## Decision Notifications
 
@@ -104,8 +95,7 @@ This applies to: plan approval, clarification questions, test failures, manual v
 
 1. **Create the decision** (one command — writes both the notification file AND the JSONL log entry):
 ```bash
-node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Plan Approval for Issue #N" "Approve,Request changes" --session-id "$DSQ_SESSION"
-```
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Plan Approval for Issue #N" "Approve,Request changes"```
 
 2. **Then wait for user input** in the terminal as normal.
 
@@ -191,21 +181,7 @@ Branch name: `fix/adhoc-20260405-143022` or `feat/adhoc-20260405-143022`
 
 **From this point on, all git/build/test commands run inside the worktree directory.**
 
-### Step 3: Initialize Session
-
-Generate a unique session ID and log the session start. This enables multi-session tracking — the dashboard can show session history and the user can resume previous work.
-
-```bash
-# Generate a unique dsq session ID for this run:
-DSQ_SESSION=$(node "$SQUIRE_DIR/bin/sq.mjs" session-id)
-
-# Log session_start as the very first event (before task_start):
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" session_start "New session started" --branch "$BRANCH" --session-id "$DSQ_SESSION"
-```
-
-**All subsequent `sq.mjs log` and `sq.mjs decision` calls MUST include `--session-id "$DSQ_SESSION"`.**
-
-### Step 4: Check Session History
+### Step 3: Check Session History
 
 Check if there are previous sessions for this issue by scanning the JSONL log:
 
@@ -220,8 +196,7 @@ PREV_SESSIONS=$(grep -o '"dsq_session":"[^"]*"' "$SQUIRE_DIR/logs/$TASK_LOG_ID.j
 - Ask: "Continue where the last session left off, or start fresh?"
 - Create a decision notification before prompting:
   ```bash
-  node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Resume Session?" "Continue,Start fresh" --session-id "$DSQ_SESSION"
-  ```
+  node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Resume Session?" "Continue,Start fresh"  ```
 - After user responds: `node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" "$TASK_LOG_ID"`
 
 **Auto mode**: Silently continue — no prompt, no decision notification. Resume from the appropriate phase based on previous session state.
@@ -316,8 +291,7 @@ After approval, proceed to Phase 4 with the pre-selected strategy. The user can 
 
 **Otherwise (no `--test-scenario`)**, create a decision notification so the Dashboard can alert the user:
 ```bash
-node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Plan Approval" "Approve,Request changes" --session-id "$DSQ_SESSION"
-```
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Plan Approval" "Approve,Request changes"```
 Then prompt:
 
 ```
@@ -379,7 +353,7 @@ If the file does not exist or a field is missing, auto-detect from project files
 - Run build + impacted tests (same as strategy 2)
 - If either fails: auto-fix up to 3 rounds
 - All pass → prepare the manual verify environment and STOP:
-  - Create a decision: `node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Manual Verify" "OK,Has issues" --session-id "$DSQ_SESSION"`
+  - Create a decision: `node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Manual Verify" "OK,Has issues"`
   - Wait for user to reply "ok" or describe issues to fix.
   - After user responds: `node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" "$TASK_LOG_ID"`
 
