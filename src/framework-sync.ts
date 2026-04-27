@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { SquireBackend } from './backend';
+import { SquireBackend, COMMAND_AGENT_NAMES } from './backend';
 
 /**
  * Syncs DevSquire agent .md files to the backend's agent directory.
@@ -9,17 +9,6 @@ import { SquireBackend } from './backend';
  */
 export class FrameworkSync {
   private readonly bundledDir: string;
-
-  /**
-   * Agent names that should be synced as commands (not agents) for backends
-   * that support a separate commands directory (e.g., Claude Code).
-   * Keep in sync with ClaudeCodeBackend.COMMAND_AGENTS.
-   */
-  private static readonly COMMAND_NAMES = new Set([
-    'squire-dev-issue',
-    'squire-watch-pr',
-    'squire-pr-reviewer',
-  ]);
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -49,18 +38,32 @@ export class FrameworkSync {
     let synced = 0;
 
     if (targetDirs.commands) {
-      const commandNames = FrameworkSync.COMMAND_NAMES;
+      const commandNames = COMMAND_AGENT_NAMES;
 
       if (hasBackendCommands) {
         // Prefer backend-specific command files, fall back to generic agents
         synced += this.syncDir(commandsSrcDir, targetDirs.commands);
         // Also sync any command agents that don't have a backend-specific version
-        const backendCommandFiles = new Set(
-          fs.readdirSync(commandsSrcDir).filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', '')),
-        );
-        synced += this.syncDir(agentsSrcDir, targetDirs.commands, (f) =>
-          commandNames.has(f.replace('.md', '')) && !backendCommandFiles.has(f.replace('.md', '')),
-        );
+        let backendCommandFiles: Set<string>;
+        try {
+          backendCommandFiles = new Set(
+            fs.readdirSync(commandsSrcDir).filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', '')),
+          );
+        } catch {
+          backendCommandFiles = new Set();
+        }
+        const fallbackFilter = (f: string) => {
+          const name = f.replace('.md', '');
+          return commandNames.has(name) && !backendCommandFiles.has(name);
+        };
+        const fallbackCount = this.syncDir(agentsSrcDir, targetDirs.commands, fallbackFilter);
+        // Warn about command agents with no source file in either location
+        for (const name of commandNames) {
+          if (!backendCommandFiles.has(name) && !fs.existsSync(path.join(agentsSrcDir, `${name}.md`))) {
+            console.warn(`DevSquire: command agent '${name}' has no source file in commands or agents directory`);
+          }
+        }
+        synced += fallbackCount;
       } else {
         // No backend-specific commands — use generic agent files as commands
         synced += this.syncDir(agentsSrcDir, targetDirs.commands, (f) => commandNames.has(f.replace('.md', '')));
