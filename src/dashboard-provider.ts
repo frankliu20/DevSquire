@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { TaskRunner } from './task-runner';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
@@ -9,6 +10,14 @@ import { TaskStateReader, defaultRunningPhase } from './task-state';
 import { SkillsReader } from './skills-reader';
 import { ReportGenerator } from './report';
 import { getDashboardHtml } from './dashboard-html';
+
+/** A single session entry from the global session index */
+export interface SessionEntry {
+  id: string;
+  startedAt?: string;
+  endedAt?: string | null;
+  aiSessions?: Array<{ source: 'claude' | 'copilot'; id: string; resumable: boolean }>;
+}
 
 export class DashboardViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
@@ -57,8 +66,9 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   private setupFileWatchers(): void {
     const logsDir = this.squireDir.logsDir;
     const decisionsDir = this.squireDir.decisionsDir;
+    const sessionsDir = path.join(os.homedir(), '.squire', 'sessions');
 
-    for (const dir of [logsDir, decisionsDir]) {
+    for (const dir of [logsDir, decisionsDir, sessionsDir]) {
       try {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const watcher = fs.watch(dir, () => {
@@ -179,6 +189,18 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.taskRunner.focusTerminal(msg.taskId);
         break;
       }
+      case 'resumeSession': {
+        // Resume a Claude AI session in a new terminal: claude --resume <aiSessionId>
+        const resumeCwd = msg.worktreeDir || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+        const resumeTerminal = vscode.window.createTerminal({
+          name: `Resume: ${msg.aiSessionId?.slice(0, 8) || 'session'}`,
+          cwd: resumeCwd,
+          iconPath: new vscode.ThemeIcon('debug-restart'),
+        });
+        resumeTerminal.show(false);
+        resumeTerminal.sendText(`claude --resume "${msg.aiSessionId}"`, true);
+        break;
+      }
 
       // --- Decisions ---
       case 'getDecisions': {
@@ -258,6 +280,9 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     const decisions = this.taskStateReader.readDecisions();
     const waitingTaskIds = new Set(decisions.map(d => d.taskId));
 
+    // Read global session index for session history
+    const sessionIndex = this.readGlobalSessionIndex();
+
     // Track which log tasks have been claimed by a runtime task
     const claimedLogIds = new Set<string>();
 
@@ -274,6 +299,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       if (logTask) claimedLogIds.add(logTask.id);
       const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? defaultRunningPhase(rt.type) : 'planned');
       const isWaiting = waitingTaskIds.has(rt.id) || waitingTaskIds.has(logTask?.id || '');
+      const taskLogId = rt.taskLogId || logTask?.id || '';
       return {
         id: rt.id,
         label: rt.label,
@@ -288,6 +314,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         hasTerminal: !!rt.terminal,
         startedAt: logTask?.startedAt || new Date(rt.createdAt).toISOString(),
         events: logTask?.events || [],
+        sessions: sessionIndex[taskLogId] || [],
         createdAt: rt.createdAt,
         updatedAt: logTask?.updatedAt ? new Date(logTask.updatedAt).getTime() : rt.createdAt,
       };
@@ -308,6 +335,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           hasTerminal: false,
           startedAt: lt.startedAt,
           events: lt.events,
+          sessions: sessionIndex[lt.id] || [],
           createdAt: new Date(lt.startedAt).getTime(),
           updatedAt: new Date(lt.updatedAt).getTime(),
         });
@@ -316,6 +344,31 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
     merged.sort((a, b) => b.updatedAt - a.updatedAt);
     this.post('tasks', merged);
+  }
+
+  /**
+   * Read the global session index (~/.squire/sessions/index.json)
+   * and return a map of taskLogId → SessionEntry[] for the current repo.
+   */
+  private readGlobalSessionIndex(): Record<string, SessionEntry[]> {
+    const indexPath = path.join(os.homedir(), '.squire', 'sessions', 'index.json');
+    try {
+      if (!fs.existsSync(indexPath)) return {};
+      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+      const repoSlug = this.repoInfo.slug;
+      const repoEntry = index[repoSlug];
+      if (!repoEntry) return {};
+      const result: Record<string, SessionEntry[]> = {};
+      for (const [taskLogId, taskEntry] of Object.entries(repoEntry)) {
+        const sessions = (taskEntry as any)?.sessions;
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          result[taskLogId] = sessions;
+        }
+      }
+      return result;
+    } catch {
+      return {};
+    }
   }
 
   private post(type: string, data: any): void {

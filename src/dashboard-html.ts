@@ -317,6 +317,29 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 .event-time { color: var(--fg-muted); white-space: nowrap; min-width: 56px; font-family: var(--font-mono); }
 .event-msg { color: var(--fg); }
 
+/* ===== Session history ===== */
+.session-toggle {
+  font-size: var(--text-xs); color: var(--fg-muted); cursor: pointer; user-select: none;
+  margin-top: var(--sp-1); padding: 2px 0; display: flex; align-items: center; gap: var(--sp-1);
+}
+.session-toggle:hover { color: var(--fg); }
+.session-toggle .chevron { display: inline-block; transition: transform var(--t-fast); font-size: 10px; }
+.session-toggle .chevron.open { transform: rotate(90deg); }
+.session-list {
+  font-size: var(--text-xs); margin-top: var(--sp-1); border-top: 1px solid var(--border-subtle);
+  padding-top: var(--sp-1); max-height: 150px; overflow-y: auto;
+}
+.session-row {
+  display: flex; align-items: center; gap: var(--sp-2); padding: 2px 0;
+}
+.session-source { font-size: 12px; flex-shrink: 0; }
+.session-id { font-family: var(--font-mono); color: var(--fg-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-time { color: var(--fg-muted); white-space: nowrap; font-family: var(--font-mono); }
+.session-status { font-size: 10px; }
+.session-status.active { color: var(--green); }
+.session-status.ended { color: var(--fg-muted); }
+.session-actions { margin-left: auto; flex-shrink: 0; }
+
 /* ===== Action card ===== */
 .action-card {
   border: 1px solid var(--border-subtle); border-radius: var(--r-md);
@@ -579,7 +602,7 @@ function cisBadge(status) {
 // ===== State =====
 let issues = [], prs = { mine: [], review: [] }, tasks = [], decisions = [], skills = [], accounts = [];
 let currentTab = 'issues', prFilter = 'mine', reportView = 'eod', skillFilter = 'all';
-let expandedIssue = null, expandedTask = null, expandedSkill = null, expandedPR = null;
+let expandedIssue = null, expandedTask = null, expandedSkill = null, expandedPR = null, expandedSessions = null;
 let confirmCallback = null;
 let issuesLoaded = false, prsLoaded = false;
 let myPRSubFilter = 'all'; // 'all' | 'ready'
@@ -876,6 +899,44 @@ function renderTasks(list) {
         ).join('') + '</div>'
       : '';
 
+    // Session history section
+    const sessions = t.sessions || [];
+    const sessionCount = sessions.length;
+    const sessionToggleId = 'sess-' + t.id;
+    const sessionsHtml = sessionCount > 0
+      ? '<div class="session-toggle" onclick="event.stopPropagation();toggleSessions(\'' + t.id + '\')">'
+        + '<span class="chevron ' + (expandedSessions === t.id ? 'open' : '') + '">&#9654;</span>'
+        + 'Sessions (' + sessionCount + ')'
+        + '</div>'
+        + (expandedSessions === t.id
+          ? '<div class="session-list">' + sessions.map(function(s, si) {
+              var sourceIcon = '';
+              var resumableSession = null;
+              if (s.aiSessions && s.aiSessions.length) {
+                sourceIcon = s.aiSessions.map(function(a) { return a.source === 'claude' ? '🤖' : '🔧'; }).join(' ');
+                for (var ai = 0; ai < s.aiSessions.length; ai++) {
+                  if (s.aiSessions[ai].resumable) { resumableSession = s.aiSessions[ai]; break; }
+                }
+              }
+              var statusLabel = s.endedAt ? '<span class="session-status ended">ended</span>' : '<span class="session-status active">active</span>';
+              var timeStr = s.startedAt ? shortTime(s.startedAt) : (s.endedAt ? shortTime(s.endedAt) : '');
+              var idStr = s.id ? s.id.slice(0, 12) : '#' + (si + 1);
+              var actionBtn = '';
+              if (!t.hasTerminal && resumableSession) {
+                actionBtn = '<div class="session-actions"><button class="btn-s btn-sec" onclick="event.stopPropagation();resumeSession(\'' + esc(t.id) + '\',\'' + esc(resumableSession.id) + '\',\'' + esc((t.worktreeDir || '').replace(/\\\\/g, '/')) + '\')">&#9654; Resume</button></div>';
+              }
+              return '<div class="session-row">'
+                + '<span class="session-source">' + (sourceIcon || '📋') + '</span>'
+                + '<span class="session-id" title="' + esc(s.id || '') + '">' + esc(idStr) + '</span>'
+                + '<span class="session-time">' + timeStr + '</span>'
+                + statusLabel
+                + actionBtn
+                + '</div>';
+            }).join('')
+          + '</div>'
+          : '')
+      : '';
+
     return \`
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
@@ -895,6 +956,7 @@ function renderTasks(list) {
         \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Send Ctrl+C to the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
       </div>
       \${eventsHtml}
+      \${sessionsHtml}
     </div>\`;
   }).join('');
 }
@@ -939,6 +1001,8 @@ function offWork() {
 }
 function openWorktree(id, dir) { vscode.postMessage({ type: 'openWorktree', taskId: id, worktreeDir: dir }); }
 function focusTerminal(id) { vscode.postMessage({ type: 'focusTerminal', taskId: id }); }
+function toggleSessions(id) { expandedSessions = expandedSessions === id ? null : id; renderTasks(tasks); }
+function resumeSession(taskId, aiSessionId, worktreeDir) { vscode.postMessage({ type: 'resumeSession', taskId: taskId, aiSessionId: aiSessionId, worktreeDir: worktreeDir }); }
 
 // ===== Actions (Decisions) =====
 function renderDecisions(list) {
@@ -1199,7 +1263,7 @@ document.addEventListener('keydown', e => {
   const tabMap = { '1': 'issues', '2': 'prs', '3': 'tasks', '4': 'actions', '5': 'skills', '6': 'report' };
   if (tabMap[e.key]) { switchTab(tabMap[e.key]); e.preventDefault(); }
   if (e.key === 'r' || e.key === 'R') { refreshIssues(); refreshPRs(); refreshTasks(); }
-  if (e.key === 'Escape') { closeConfirm(); expandedIssue = null; expandedTask = null; }
+  if (e.key === 'Escape') { closeConfirm(); expandedIssue = null; expandedTask = null; expandedSessions = null; }
 });
 
 // ===== Initial load — only issues (lazy load everything else) =====
