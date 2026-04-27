@@ -88,15 +88,16 @@ export class TaskRunner {
   }
 
   /** Run /squire-dev-issue — matches dashboard assign command */
-  async runDevIssue(issueInput: string, mode?: 'normal' | 'auto', issueTitle?: string): Promise<TaskInfo> {
-    const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('devIssue.mode', 'auto') as 'normal' | 'auto';
+  async runDevIssue(issueInput: string, mode?: 'normal' | 'auto' | 'chat', issueTitle?: string): Promise<TaskInfo> {
+    const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('devIssue.mode', 'auto') as 'normal' | 'auto' | 'chat';
     const issueNum = this.extractIssueNumber(issueInput);
     const issueUrl = issueNum
       ? `${this.repoUrl}/issues/${issueNum}`
       : issueInput;
 
     // Duplicate detection: check if a task with same issue is already running
-    if (issueNum) {
+    // Chat mode allows concurrent sessions on the same issue
+    if (issueNum && effectiveMode !== 'chat') {
       for (const t of this.tasks.values()) {
         if (t.status === 'running' && t.issueUrl === issueUrl) {
           vscode.window.showWarningMessage(`DevSquire: Issue #${issueNum} already has a running task.`);
@@ -108,16 +109,20 @@ export class TaskRunner {
 
     const branchName = issueNum ? `dev/issue-${issueNum}` : `dev/task-${Date.now()}`;
 
-    const wt = this.worktree.create(this.workspaceRoot, branchName);
+    // Chat mode: no worktree, run in workspace root
+    const isChat = effectiveMode === 'chat';
+    const wt = isChat ? undefined : this.worktree.create(this.workspaceRoot, branchName);
 
-    const terminalTitle = issueNum
-      ? `Squire: Dev #${issueNum}`
-      : `Squire: dev-adhoc-${Date.now()}`;
+    const terminalTitle = isChat
+      ? (issueNum ? `Squire: Chat #${issueNum}` : `Squire: Chat`)
+      : issueNum
+        ? `Squire: Dev #${issueNum}`
+        : `Squire: dev-adhoc-${Date.now()}`;
 
-    const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
+    const modeFlag = effectiveMode === 'auto' ? '--auto ' : effectiveMode === 'chat' ? '--chat ' : '';
     const agentArgs: AgentLaunch = {
       agent: 'squire-dev-issue',
-      initialPrompt: `${autoFlag}${issueUrl}`,
+      initialPrompt: `${modeFlag}${issueUrl}`,
     };
 
     const ts = Date.now();
@@ -128,8 +133,8 @@ export class TaskRunner {
       type: 'dev-issue',
       label: this.formatDevLabel(effectiveMode, issueNum, issueTitle, issueInput),
       issueUrl,
-      worktreeBranch: branchName,
-      worktreeDir: wt?.path,
+      worktreeBranch: isChat ? undefined : branchName,
+      worktreeDir: isChat ? undefined : wt?.path,
       status: 'running',
       createdAt: ts,
     };
@@ -217,8 +222,8 @@ export class TaskRunner {
   }
 
   /** Fix PR comments via squire-dev-issue agent */
-  async runFixComments(prNumber: number, mode?: 'normal' | 'auto'): Promise<TaskInfo> {
-    const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('fixComments.mode', 'auto') as 'normal' | 'auto';
+  async runFixComments(prNumber: number, mode?: 'normal' | 'auto' | 'chat'): Promise<TaskInfo> {
+    const effectiveMode = mode || vscode.workspace.getConfiguration('devSquire').get<string>('fixComments.mode', 'auto') as 'normal' | 'auto' | 'chat';
     const autoFlag = effectiveMode === 'auto' ? '--auto ' : '';
     const agentArgs: AgentLaunch = {
       agent: 'squire-dev-issue',
@@ -529,7 +534,7 @@ export class TaskRunner {
   }
 
   private formatDevLabel(mode: string, issueNum: string | null, title?: string, rawInput?: string): string {
-    const modeTag = mode === 'auto' ? '[Auto]' : '[Normal]';
+    const modeTag = mode === 'auto' ? '[Auto]' : mode === 'chat' ? '[Chat]' : '[Normal]';
     if (issueNum) {
       const suffix = title ? ` ${title}` : '';
       return `${modeTag} Dev #${issueNum}${suffix}`;
