@@ -882,7 +882,7 @@ function renderTasks(list) {
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
         <span class="badge \${badgeClass}">\${t.status === 'orphan' ? 'orphan' : esc(latestStatus)}</span>
       </div>
-      <div class="pipeline">\${pipeline}</div>
+      \${isCyclic ? '' : '<div class="pipeline">' + pipeline + '</div>'}
       <div class="task-meta">
         \${t.branch ? t.branch + ' · ' : ''}\${t.prNumber ? 'PR #' + t.prNumber + ' · ' : ''}\${shortTime(t.startedAt)}
         \${t.status === 'running' ? ' · ' + duration(t.startedAt) : ''}
