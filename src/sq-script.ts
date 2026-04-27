@@ -6,18 +6,33 @@
  * Using Node.js ensures cross-platform compatibility (Windows/macOS/Linux).
  *
  * Usage (from agent prompts):
- *   node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" <task-id> <event-type> <detail> [--branch X] [--pr N] [--pr-url U]
+ *   node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" <task-id> <event-type> <detail> [--branch X] [--pr N] [--pr-url U] [--session-id S]
  *   node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" <task-id> <title> <options-csv>
  *   node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" <task-id>
+ *   node "$SQUIRE_DIR/bin/sq.mjs" session-id
  */
 export const SQ_SCRIPT = `#!/usr/bin/env node
 import { writeFileSync, appendFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
-const [,, cmd, squireDir, ...rest] = process.argv;
+const [,, cmd, ...argv] = process.argv;
+
+function generateSessionId() {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 6).padEnd(4, '0');
+  return \\\`dsq-\\\${ts}-\\\${rand}\\\`;
+}
+
+if (cmd === 'session-id') {
+  console.log(generateSessionId());
+  process.exit(0);
+}
+
+const squireDir = argv[0];
+const rest = argv.slice(1);
 
 if (!cmd || !squireDir) {
-  console.error('Usage: sq.mjs <log|decision|decision-clear> <squire-dir> ...');
+  console.error('Usage: sq.mjs <log|decision|decision-clear|session-id> <squire-dir> ...');
   process.exit(1);
 }
 
@@ -55,6 +70,7 @@ if (cmd === 'log') {
   if (flags.branch) entry.branch = flags.branch;
   if (flags.pr) entry.pr_number = parseInt(flags.pr, 10);
   if (flags['pr-url']) entry.pr_url = flags['pr-url'];
+  if (flags['session-id']) entry.dsq_session = flags['session-id'];
 
   mkdirSync(logsDir, { recursive: true });
   appendFileSync(join(logsDir, taskId + '.jsonl'), JSON.stringify(entry) + String.fromCharCode(10));
@@ -100,7 +116,7 @@ if (cmd === 'log') {
   try { unlinkSync(join(decisionsDir, taskId + '.json')); } catch { /* ok if missing */ }
 
 } else {
-  console.error('Unknown command: ' + cmd + '. Use: log, decision, decision-clear');
+  console.error('Unknown command: ' + cmd + '. Use: log, decision, decision-clear, session-id');
   process.exit(1);
 }
 `;
