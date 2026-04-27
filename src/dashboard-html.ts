@@ -1052,7 +1052,7 @@ function renderTaskCard(t) {
               var idStr = s.id ? s.id.slice(0, 12) : '#' + (si + 1);
               var actionBtn = '';
               if (!t.hasTerminal && resumableSession) {
-                actionBtn = '<div class="session-actions"><button class="btn-s btn-sec" onclick="event.stopPropagation();resumeSession(\\'' + esc(t.id) + '\\',\\'' + esc(resumableSession.id) + '\\',\\'' + esc((t.worktreeDir || '').replace(/\\\\/g, '/')) + '\\')">&#9654; Resume</button></div>';
+                actionBtn = '<div class="session-actions"><button class="btn-s btn-sec" onclick="event.stopPropagation();resumeSession(\\'' + esc(t.id) + '\\',\\'' + esc(resumableSession.id) + '\\',\\'' + esc(resumableSession.source || 'claude') + '\\',\\'' + esc((t.worktreeDir || '').replace(/\\\\/g, '/')) + '\\')">&#9654; Resume</button></div>';
               }
               return '<div class="session-row">'
                 + '<span class="session-source">' + (sourceIcon || '📋') + '</span>'
@@ -1103,7 +1103,7 @@ function renderTaskCard(t) {
     if (canWorktree) actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>');
     if (canDismiss)  actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')" title="Hide from dashboard (keeps worktree and logs)">Dismiss</button>');
     if (canClean)    actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))" title="Remove worktree, branch, and logs permanently">Clean</button>');
-    if (canResume)   actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\''+t.id+'\\',\\''+resumable.id+'\\',\\''+(t.worktreeDir||'').replace(/\\\\/g,'/')+'\\')">▶ Resume</button>');
+    if (canResume)   actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\''+t.id+'\\',\\''+resumable.id+'\\',\\''+(resumable.source||'claude')+'\\',\\''+(t.worktreeDir||'').replace(/\\\\/g,'/')+'\\')">▶ Resume</button>');
     if (canRerun)    actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();rerunIssue(\\''+esc(t.issueUrl)+'\\',\\''+esc(t.label || '')+'\\')">▶ Re-run</button>');
     if (canStop)     actions.push('<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>');
 
@@ -1140,7 +1140,7 @@ function renderHistory(list) {
   html += filtered.map(function(h) {
     var resumeBtn = '';
     if (h.resumableSessionId) {
-      resumeBtn = '<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\'' + esc(h.taskLogId) + '\\',\\'' + esc(h.resumableSessionId) + '\\',\\'' + esc(h.worktreeDir || '') + '\\')">▶ Resume</button>';
+      resumeBtn = '<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\'' + esc(h.taskLogId) + '\\',\\'' + esc(h.resumableSessionId) + '\\',\\'' + esc(h.resumableSessionSource || 'claude') + '\\',\\'' + esc(h.worktreeDir || '') + '\\')">▶ Resume</button>';
     }
     return '<div class="history-card">'
       + '<div class="task-header"><span class="task-label">' + esc(h.label) + '</span></div>'
@@ -1189,7 +1189,7 @@ function offWork() {
 function openWorktree(id, dir) { vscode.postMessage({ type: 'openWorktree', taskId: id, worktreeDir: dir }); }
 function focusTerminal(id) { vscode.postMessage({ type: 'focusTerminal', taskId: id }); }
 function toggleSessions(id) { expandedSessions = expandedSessions === id ? null : id; renderTasks(tasks); }
-function resumeSession(taskId, aiSessionId, worktreeDir) { vscode.postMessage({ type: 'resumeSession', taskId: taskId, aiSessionId: aiSessionId, worktreeDir: worktreeDir }); }
+function resumeSession(taskId, aiSessionId, aiSource, worktreeDir) { vscode.postMessage({ type: 'resumeSession', taskId: taskId, aiSessionId: aiSessionId, aiSource: aiSource, worktreeDir: worktreeDir }); }
 function rerunIssue(issueUrl, title) { vscode.postMessage({ type: 'devIssue', issueUrl: issueUrl, mode: 'auto', title: title }); }
 
 // ===== Actions (Decisions) =====
