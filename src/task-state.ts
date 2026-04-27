@@ -8,14 +8,14 @@ export type TaskPhase =
   | 'waiting_confirm' | 'waiting_manual_test'
   | 'creating_pr' | 'done' | 'failed'
   // review-pr phases
-  | 'reviewing' | 'published'
+  | 'reviewing' | 'reviewed' | 'published'
   // watch-pr phases
   | 'monitoring' | 'fixing_ci' | 'fixing_comments';
 
 /** Pipeline phases displayed in the dashboard, per task type */
 export const PHASE_PIPELINES: Record<string, TaskPhase[]> = {
   'dev-issue':    ['analyzing', 'exploring', 'planning', 'implementing', 'testing', 'creating_pr', 'done'],
-  'review-pr':    ['reviewing', 'done', 'published'],
+  'review-pr':    ['reviewing', 'reviewed', 'published', 'done'],
   'watch-pr':     ['analyzing', 'monitoring', 'fixing_ci', 'fixing_comments', 'monitoring'],
   'fix-comments': ['analyzing', 'implementing', 'testing', 'creating_pr', 'done'],
   'run-command':  ['implementing', 'done'],
@@ -94,6 +94,7 @@ const EVENT_TYPE_TO_PHASE: Record<string, TaskPhase> = {
   pr_merged: 'done',
   worktree_cleaned: 'done',
   // review-pr events
+  review_analyzed: 'reviewed',
   review_done: 'done',
   review_published: 'published',
   // watch-pr events
@@ -114,7 +115,7 @@ const VALID_PHASES = new Set<string>([
   'implementing', 'testing', 'test_failed',
   'waiting_confirm', 'waiting_manual_test',
   'creating_pr', 'done', 'failed',
-  'reviewing', 'published',
+  'reviewing', 'reviewed', 'published',
   'monitoring', 'fixing_ci', 'fixing_comments',
 ]);
 
