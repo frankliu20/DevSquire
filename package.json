@@ -191,7 +191,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap && node scripts/check-webview-syntax.js",
     "watch": "npm run compile -- --watch",
     "lint": "eslint src --ext ts",
     "test": "vitest run",

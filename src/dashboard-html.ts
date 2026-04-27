@@ -922,7 +922,7 @@ function renderTasks(list) {
   function renderGroup(key, group, prefix) {
     const gid = prefix + '-' + key;
     const isOpen = expandedGroups[gid] !== false; // open by default
-    return '<details class="task-group" ' + (isOpen ? 'open' : '') + ' ontoggle="onGroupToggle(this,\'' + gid + '\')">'
+    return '<details class="task-group" ' + (isOpen ? 'open' : '') + ' ontoggle="onGroupToggle(this,\\'' + gid + '\\')">'
       + '<summary>'
       + '<span class="task-group-title">' + esc(group.label) + '</span>'
       + '<span class="task-group-meta">' + group.tasks.length + ' task' + (group.tasks.length > 1 ? 's' : '') + '</span>'
@@ -1001,7 +1001,7 @@ function renderTaskCard(t) {
     const sessions = t.sessions || [];
     const sessionCount = sessions.length;
     const sessionsHtml = sessionCount > 0
-      ? '<div class="session-toggle" onclick="event.stopPropagation();toggleSessions(\'' + t.id + '\')">'
+      ? '<div class="session-toggle" onclick="event.stopPropagation();toggleSessions(\\'' + t.id + '\\')">'
         + '<span class="chevron ' + (expandedSessions === t.id ? 'open' : '') + '">&#9654;</span>'
         + 'Sessions (' + sessionCount + ')'
         + '</div>'
@@ -1020,7 +1020,7 @@ function renderTaskCard(t) {
               var idStr = s.id ? s.id.slice(0, 12) : '#' + (si + 1);
               var actionBtn = '';
               if (!t.hasTerminal && resumableSession) {
-                actionBtn = '<div class="session-actions"><button class="btn-s btn-sec" onclick="event.stopPropagation();resumeSession(\'' + esc(t.id) + '\',\'' + esc(resumableSession.id) + '\',\'' + esc((t.worktreeDir || '').replace(/\\\\/g, '/')) + '\')">&#9654; Resume</button></div>';
+                actionBtn = '<div class="session-actions"><button class="btn-s btn-sec" onclick="event.stopPropagation();resumeSession(\\'' + esc(t.id) + '\\',\\'' + esc(resumableSession.id) + '\\',\\'' + esc((t.worktreeDir || '').replace(/\\\\/g, '/')) + '\\')">&#9654; Resume</button></div>';
               }
               return '<div class="session-row">'
                 + '<span class="session-source">' + (sourceIcon || '📋') + '</span>'
