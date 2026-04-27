@@ -487,20 +487,21 @@ export class TaskRunner {
 
     terminal.show(false);
 
-    // Inject task-log-id so agents write to the correct JSONL file.
-    // Use bracket syntax [task-log-id:xxx] appended at the END to avoid
-    // interfering with slash command names or CLI flag parsing.
+    // Inject task-log-id and squire-dir so agents write to the correct location.
+    // Use bracket syntax appended at the END to avoid interfering with CLI flag parsing.
     const logIdTag = `[task-log-id:${taskLogId}]`;
+    const squireDirTag = `[squire-dir:${this.squireDir.dir.replace(/\\/g, '/')}]`;
+    const tags = `${logIdTag} ${squireDirTag}`;
     if (launch.agent && launch.initialPrompt) {
-      launch.initialPrompt = `${launch.initialPrompt} ${logIdTag}`;
+      launch.initialPrompt = `${launch.initialPrompt} ${tags}`;
     } else if (launch.agent) {
-      launch.initialPrompt = logIdTag;
+      launch.initialPrompt = tags;
     }
     if (launch.interactivePrompt) {
-      launch.interactivePrompt = `${launch.interactivePrompt} ${logIdTag}`;
+      launch.interactivePrompt = `${launch.interactivePrompt} ${tags}`;
     }
     if (launch.prompt) {
-      launch.prompt = `${launch.prompt} ${logIdTag}`;
+      launch.prompt = `${launch.prompt} ${tags}`;
     }
 
     if (launch.agent) {

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { SQ_SCRIPT } from './sq-script';
 
 /**
  * Manages the .squire/ directory in the workspace root.
@@ -26,6 +27,7 @@ export class SquireDir {
       }
     }
     this.ensureConfig();
+    this.ensureBinScript();
   }
 
   /** Place a .gitignore inside .squire/ to ignore its own contents (never modify project .gitignore) */
@@ -106,6 +108,21 @@ export class SquireDir {
 
     try {
       fs.writeFileSync(configPath, template, 'utf-8');
+    } catch {
+      // Non-critical
+    }
+  }
+
+  /** Install the cross-platform sq.mjs helper script into .squire/bin/ */
+  ensureBinScript(): void {
+    const binDir = path.join(this.dir, 'bin');
+    const scriptPath = path.join(binDir, 'sq.mjs');
+    try {
+      if (!fs.existsSync(binDir)) {
+        fs.mkdirSync(binDir, { recursive: true });
+      }
+      // Always overwrite so updates propagate
+      fs.writeFileSync(scriptPath, SQ_SCRIPT, 'utf-8');
     } catch {
       // Non-critical
     }
