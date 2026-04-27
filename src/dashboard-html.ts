@@ -814,13 +814,13 @@ function badgeFor(action) {
 // ===== Tasks =====
 function refreshTasks() { vscode.postMessage({ type: 'getTasks' }); }
 const PHASES = ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'];
-const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done', reviewing: 'Reviewing', published: 'Published', monitoring: 'Monitor', fixing_ci: 'Fix CI', fixing_comments: 'Fix Comments' };
+const PHASE_LABELS = { planned: 'Planned', analyzing: 'Analyzing', exploring: 'Exploring', planning: 'Planning', implementing: 'Implementing', testing: 'Testing', creating_pr: 'Creating PR', done: 'Done', reviewing: 'Reviewing', reviewed: 'Reviewed', published: 'Published', monitoring: 'Monitor', fixing_ci: 'Fix CI', fixing_comments: 'Fix Comments' };
 // Map internal phases to pipeline display phases
-const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed', reviewing: 'reviewing', published: 'published', monitoring: 'monitoring', fixing_ci: 'fixing_ci', fixing_comments: 'fixing_comments' };
+const PHASE_MAP = { planned: 'planned', analyzing: 'analyzing', exploring: 'exploring', planning: 'planning', implementing: 'implementing', testing: 'testing', test_failed: 'testing', waiting_confirm: 'testing', waiting_manual_test: 'testing', creating_pr: 'creating_pr', done: 'done', failed: 'failed', reviewing: 'reviewing', reviewed: 'reviewed', published: 'published', monitoring: 'monitoring', fixing_ci: 'fixing_ci', fixing_comments: 'fixing_comments' };
 // Per-type pipeline phases
 const PHASE_PIPELINES = {
   'dev-issue':    ['planned','analyzing','exploring','planning','implementing','testing','creating_pr','done'],
-  'review-pr':    ['reviewing','done','published'],
+  'review-pr':    ['reviewing','reviewed','published','done'],
   'watch-pr':     ['analyzing','monitoring','fixing_ci','fixing_comments','monitoring'],
   'fix-comments': ['analyzing','implementing','testing','creating_pr','done'],
   'run-command':  ['implementing','done'],
@@ -833,7 +833,7 @@ function renderTasks(list) {
   c.innerHTML = list.map(t => {
     var phases = PHASE_PIPELINES[t.type] || PHASE_PIPELINES['dev-issue'];
     // Own PR reviews don't need 'published' step
-    if (t.type === 'review-pr' && t.isOwnPR) phases = ['reviewing', 'done'];
+    if (t.type === 'review-pr' && t.isOwnPR) phases = ['reviewing', 'reviewed', 'done'];
     const isCyclic = CYCLIC_TYPES[t.type] || false;
     const rawPhase = t.phase || 'planned';
     const displayPhase = PHASE_MAP[rawPhase] || phases[0];
@@ -882,7 +882,7 @@ function renderTasks(list) {
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
         <span class="badge \${badgeClass}">\${t.status === 'orphan' ? 'orphan' : esc(latestStatus)}</span>
       </div>
-      <div class="pipeline">\${pipeline}</div>
+      \${isCyclic ? '' : '<div class="pipeline">' + pipeline + '</div>'}
       <div class="task-meta">
         \${t.branch ? t.branch + ' · ' : ''}\${t.prNumber ? 'PR #' + t.prNumber + ' · ' : ''}\${shortTime(t.startedAt)}
         \${t.status === 'running' ? ' · ' + duration(t.startedAt) : ''}

@@ -167,12 +167,22 @@ For each unresolved comment:
 
 ## Step 3: Act Based on Strategy
 
-**After presenting the review summary, log completion:**
+**After presenting the review summary, log that analysis is complete:**
 ```bash
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_done "Review complete" --pr $PR_NUMBER
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_analyzed "Review summary ready" --pr $PR_NUMBER
 ```
 
 Follow the strategy-specific behavior defined above. For `normal`, wait for user input. For `auto` and `quick-approve`, proceed immediately.
+
+**After publishing to GitHub** (auto/quick-approve, or after user confirms in normal):
+```bash
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_published "Review published" --pr $PR_NUMBER
+```
+
+**When the review task is fully complete** (user says done in normal, or after publishing in auto/quick-approve):
+```bash
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_done "Review complete" --pr $PR_NUMBER
+```
 
 ## Step 4: Interactive Discussion (normal strategy)
 
@@ -272,12 +282,17 @@ The extension writes `reviewing` on task start. You handle the rest:
 
 **After presenting the review summary** (all strategies, including own-PR):
 ```bash
-node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_done "Review complete" --pr $PR_NUMBER
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_analyzed "Review summary ready" --pr $PR_NUMBER
 ```
 
-**After publishing a review to GitHub** (auto/quick-approve strategy, NOT own-PR):
+**After publishing a review to GitHub** (auto/quick-approve strategy, or user-confirmed in normal; NOT own-PR):
 ```bash
 node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_published "Review published" --pr $PR_NUMBER
+```
+
+**When the review task is fully complete** (user says done in normal, or after publishing in auto/quick-approve):
+```bash
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" review_done "Review complete" --pr $PR_NUMBER
 ```
 
 Replace `$TASK_LOG_ID`, `$SQUIRE_DIR`, and `$PR_NUMBER` with actual values.
