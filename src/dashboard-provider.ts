@@ -160,21 +160,23 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.taskRunner.runWatchPRs();
         break;
       }
-      case 'killTask': {
-        this.taskRunner.killTask(msg.taskId);
+      case 'stopTask': {
+        this.taskRunner.stopTask(msg.taskId);
+        break;
+      }
+      case 'dismissTask': {
+        this.taskRunner.dismissTask(msg.taskId);
+        this.sendTasks();
         break;
       }
       case 'cleanupTask': {
-        this.taskRunner.cleanupTask(msg.taskId);
-        break;
-      }
-      case 'cleanupOrphan': {
-        this.taskRunner.cleanOrphanTask(msg.taskId);
+        this.taskRunner.cleanTask(msg.taskId);
         this.sendTasks();
         break;
       }
       case 'cleanAll': {
         this.taskRunner.cleanAll();
+        this.sendTasks();
         break;
       }
       case 'syncMain': {
@@ -327,7 +329,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           id: lt.id,
           label: lt.issueNumber ? `Issue #${lt.issueNumber}` : lt.id,
           type: 'dev-issue' as const,
-          status: lt.phase === 'done' ? 'completed' as const : lt.phase === 'failed' ? 'failed' as const : 'orphan' as const,
+          status: lt.phase === 'done' ? 'completed' as const : lt.phase === 'failed' ? 'failed' as const : 'completed' as const,
           phase: lt.phase,
           branch: lt.branch,
           prNumber: lt.prNumber,

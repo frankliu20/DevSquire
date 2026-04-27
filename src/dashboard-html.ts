@@ -289,7 +289,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
 .task-card.running { border-left: 3px solid var(--yellow); }
 .task-card.done { border-left: 3px solid var(--green); }
 .task-card.failed { border-left: 3px solid var(--red); }
-.task-card.orphan { border-left: 3px solid var(--fg-muted); opacity: 0.75; }
+.task-card.completed { border-left: 3px solid var(--fg-muted); opacity: 0.75; }
 .task-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-1); }
 .task-label { font-weight: 600; font-size: var(--text-base); }
 .task-meta { font-size: var(--text-xs); color: var(--fg-muted); margin-bottom: var(--sp-1); font-family: var(--font-mono); }
@@ -662,7 +662,7 @@ function issueTaskId(num) {
 }
 function phaseBadge(phase) {
   if (!phase) return '';
-  const map = { done: 'badge-green', failed: 'badge-red', orphan: 'badge-neutral', implementing: 'badge-blue', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-purple', creating_pr: 'badge-purple', planned: 'badge-neutral' };
+  const map = { done: 'badge-green', failed: 'badge-red', completed: 'badge-neutral', implementing: 'badge-blue', testing: 'badge-yellow', exploring: 'badge-blue', analyzing: 'badge-blue', planning: 'badge-purple', creating_pr: 'badge-purple', planned: 'badge-neutral' };
   const cls = Object.entries(map).find(([k]) => phase.includes(k))?.[1] || 'badge-neutral';
   return '<span class="badge ' + cls + '">' + esc(phase) + '</span>';
 }
@@ -866,7 +866,7 @@ function renderTasks(list) {
     // For cyclic pipelines, find the last occurrence to handle repeated phases (e.g. monitoring appears twice)
     const phaseIdx = isCyclic ? phases.lastIndexOf(displayPhase) : phases.indexOf(displayPhase);
     const isFailed = rawPhase === 'failed' || rawPhase === 'test_failed';
-    const phaseClass = (!isCyclic && rawPhase === 'done') ? 'done' : isFailed ? 'failed' : t.status === 'orphan' ? 'orphan' : t.status === 'running' ? 'running' : '';
+    const phaseClass = (!isCyclic && rawPhase === 'done') ? 'done' : isFailed ? 'failed' : t.status === 'completed' ? 'completed' : t.status === 'running' ? 'running' : '';
     // For cyclic: show unique steps, only highlight current; for linear: show progress bar
     const displayPhases = isCyclic ? phases : (phases.length <= 2 ? phases : phases.filter(p => p !== 'done'));
     const pipeline = displayPhases.map((p, i) => {
@@ -874,11 +874,11 @@ function renderTasks(list) {
       if (isCyclic) {
         // Cyclic: only highlight the current step, don't mark previous as done
         if (isFailed && i === phaseIdx) cls = 'failed';
-        else if (i === phaseIdx && (t.status === 'running' || t.status === 'orphan')) cls = 'active';
+        else if (i === phaseIdx && t.status === 'running') cls = 'active';
       } else {
         if (isFailed && i === phaseIdx) cls = 'failed';
         else if (rawPhase === 'done' || i < phaseIdx) cls = 'done';
-        else if (i === phaseIdx && (t.status === 'running' || t.status === 'orphan')) cls = 'active';
+        else if (i === phaseIdx && t.status === 'running') cls = 'active';
       }
       return '<div class="pipeline-step ' + cls + '"><div class="pipeline-bar"></div><div class="pipeline-label">' + (PHASE_LABELS[p] || p) + '</div></div>';
     }).join('');
@@ -894,7 +894,7 @@ function renderTasks(list) {
       if (msg && typeof msg === 'string' && msg.length > 1) latestStatus = msg;
     }
     if (t.waiting) latestStatus += ' ⏳';
-    var badgeClass = (!isCyclic && rawPhase === 'done') ? 'badge-green' : isFailed ? 'badge-red' : t.status === 'orphan' ? 'badge-neutral' : 'badge-yellow';
+    var badgeClass = (!isCyclic && rawPhase === 'done') ? 'badge-green' : isFailed ? 'badge-red' : t.status === 'completed' ? 'badge-neutral' : 'badge-yellow';
 
     const eventsHtml = t.events && expandedTask === t.id
       ? '<div class="event-log">' + t.events.slice(-15).map(e =>
@@ -944,7 +944,7 @@ function renderTasks(list) {
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
-        <span class="badge \${badgeClass}">\${t.status === 'orphan' ? 'orphan' : esc(latestStatus)}</span>
+        <span class="badge \${badgeClass}">\${esc(latestStatus)}</span>
       </div>
       \${isCyclic || isChat ? '' : '<div class="pipeline">' + pipeline + '</div>'}
       <div class="task-meta">
@@ -954,9 +954,9 @@ function renderTasks(list) {
       <div class="task-actions">
         \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
         \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>' : ''}
-        \${t.status === 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();cleanupOrphan(\\''+t.id+'\\')">Clean</button>' : ''}
-        \${t.status !== 'running' && t.status !== 'orphan' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
-        \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Send Ctrl+C to the terminal.\\',()=>killTask(\\''+t.id+'\\'))">Stop</button>' : ''}
+        \${t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')">Dismiss</button>' : ''}
+        \${t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
+        \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal and mark completed.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>' : ''}
       </div>
       \${eventsHtml}
       \${sessionsHtml}
@@ -964,9 +964,9 @@ function renderTasks(list) {
   }).join('');
 }
 function toggleTaskEvents(id) { expandedTask = expandedTask === id ? null : id; renderTasks(tasks); }
-function killTask(id) { vscode.postMessage({ type: 'killTask', taskId: id }); }
+function stopTask(id) { vscode.postMessage({ type: 'stopTask', taskId: id }); }
+function dismissTask(id) { vscode.postMessage({ type: 'dismissTask', taskId: id }); }
 function cleanupTask(id) { vscode.postMessage({ type: 'cleanupTask', taskId: id }); }
-function cleanupOrphan(id) { vscode.postMessage({ type: 'cleanupOrphan', taskId: id }); }
 function cleanAll() { vscode.postMessage({ type: 'cleanAll' }); }
 function syncMain() { vscode.postMessage({ type: 'syncMain' }); }
 function offWork() {
@@ -1228,7 +1228,7 @@ window.addEventListener('message', e => {
       break;
     case 'tasks':
       tasks = msg.data;
-      document.getElementById('statTasks').textContent = tasks.filter(t => t.status === 'running' || t.status === 'orphan').length;
+      document.getElementById('statTasks').textContent = tasks.filter(t => t.status === 'running').length;
       renderTasks(tasks);
       if (issuesLoaded) filterIssues(); // refresh issue phase badges
       break;
