@@ -997,7 +997,7 @@ function renderTaskCard(t) {
     // For cyclic pipelines, find the last occurrence to handle repeated phases (e.g. monitoring appears twice)
     const phaseIdx = isCyclic ? phases.lastIndexOf(displayPhase) : phases.indexOf(displayPhase);
     const isFailed = rawPhase === 'failed' || rawPhase === 'test_failed';
-    const phaseClass = (!isCyclic && rawPhase === 'done') ? 'done' : isFailed ? 'failed' : t.status === 'completed' ? 'completed' : t.status === 'running' ? 'running' : '';
+    const phaseClass = (!isCyclic && rawPhase === 'done') ? 'done' : isFailed ? 'failed' : (t.status === 'completed' || t.status === 'stopped') ? 'completed' : t.status === 'running' ? 'running' : '';
     // For cyclic: show unique steps, only highlight current; for linear: show progress bar
     const displayPhases = isCyclic ? phases : (phases.length <= 2 ? phases : phases.filter(p => p !== 'done'));
     const pipeline = displayPhases.map((p, i) => {
@@ -1022,7 +1022,7 @@ function renderTaskCard(t) {
       if (msg && typeof msg === 'string' && msg.length > 1) latestStatus = msg;
     }
     if (t.waiting) latestStatus += ' ⏳';
-    var badgeClass = (!isCyclic && rawPhase === 'done') ? 'badge-green' : isFailed ? 'badge-red' : t.status === 'completed' ? 'badge-neutral' : 'badge-yellow';
+    var badgeClass = (!isCyclic && rawPhase === 'done') ? 'badge-green' : isFailed ? 'badge-red' : (t.status === 'completed' || t.status === 'stopped') ? 'badge-neutral' : 'badge-yellow';
 
     const eventsHtml = t.events && expandedTask === t.id
       ? '<div class="event-log">' + t.events.slice(-15).map(e =>
