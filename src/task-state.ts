@@ -48,6 +48,8 @@ export interface TaskState {
   startedAt: string;
   updatedAt: string;
   events: TaskEvent[];
+  sessions: SessionInfo[];
+  currentSessionId: string;
 }
 
 export interface TaskEvent {
@@ -55,6 +57,16 @@ export interface TaskEvent {
   phase?: string;
   message?: string;
   type?: string;
+  dsqSession?: string;
+}
+
+/** Per-session summary derived from JSONL events */
+export interface SessionInfo {
+  id: string;
+  phase: TaskPhase;
+  eventCount: number;
+  startedAt: string;
+  updatedAt: string;
 }
 
 /** Pending decision from the AI */
@@ -187,10 +199,52 @@ export class TaskStateReader {
             phase: entry.phase,
             message: entry.message || entry.event,
             type: entry.type || entry.event,
+            dsqSession: entry.dsq_session,
           });
         } catch {
           // Skip malformed lines
         }
+      }
+
+      // Group events by session
+      const sessionMap = new Map<string, { phase: TaskPhase; eventCount: number; startedAt: string; updatedAt: string }>();
+      let currentSessionId = 'legacy';
+
+      for (const evt of events) {
+        const sid = evt.dsqSession || 'legacy';
+        currentSessionId = sid;
+
+        const existing = sessionMap.get(sid);
+        if (existing) {
+          existing.eventCount++;
+          existing.updatedAt = evt.timestamp;
+          // Update session phase using same logic as task-level phase
+          const evtType = evt.type;
+          if (evtType && EVENT_TYPE_TO_PHASE[evtType]) {
+            existing.phase = EVENT_TYPE_TO_PHASE[evtType];
+          } else if (evt.phase && VALID_PHASES.has(evt.phase)) {
+            existing.phase = evt.phase as TaskPhase;
+          }
+        } else {
+          let sessionPhase: TaskPhase = 'planned';
+          const evtType = evt.type;
+          if (evtType && EVENT_TYPE_TO_PHASE[evtType]) {
+            sessionPhase = EVENT_TYPE_TO_PHASE[evtType];
+          } else if (evt.phase && VALID_PHASES.has(evt.phase)) {
+            sessionPhase = evt.phase as TaskPhase;
+          }
+          sessionMap.set(sid, {
+            phase: sessionPhase,
+            eventCount: 1,
+            startedAt: evt.timestamp,
+            updatedAt: evt.timestamp,
+          });
+        }
+      }
+
+      const sessions: SessionInfo[] = [];
+      for (const [sid, info] of sessionMap) {
+        sessions.push({ id: sid, ...info });
       }
 
       return {
@@ -205,6 +259,8 @@ export class TaskStateReader {
         startedAt,
         updatedAt,
         events,
+        sessions,
+        currentSessionId,
       };
     } catch {
       return null;
