@@ -81,6 +81,7 @@ export class TaskRunner {
               repoSlug: this.repoSlug,
               taskLogId,
               cwd,
+              aiPlatform: this.backend.type,
             });
           }
           task.terminal = undefined;
@@ -368,6 +369,7 @@ export class TaskRunner {
         taskLogId: task.taskLogId || `task-${task.id}`,
         sessionId,
         cwd,
+        aiPlatform: this.backend.type,
       });
     }
   }
@@ -616,6 +618,7 @@ export class TaskRunner {
       taskLogId: taskInfo.taskLogId || `task-${taskInfo.id}`,
       sessionId,
       cwd,
+      aiPlatform: this.backend.type,
     });
   }
 

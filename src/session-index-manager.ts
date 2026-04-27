@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { detectAiSessions, AiSession } from './session-detector';
+import { detectClaudeSession, detectCopilotSession, AiSession } from './session-detector';
 
 /**
  * Events that the SessionIndexManager listens to.
@@ -13,6 +13,7 @@ export interface SessionCreatedEvent {
   taskLogId: string;
   sessionId: string;
   cwd: string;
+  aiPlatform: 'claude-code' | 'copilot-cli' | 'copilot-chat';
 }
 
 export interface SessionEndedEvent {
@@ -20,6 +21,7 @@ export interface SessionEndedEvent {
   repoSlug: string;
   taskLogId: string;
   cwd: string;
+  aiPlatform: 'claude-code' | 'copilot-cli' | 'copilot-chat';
 }
 
 export interface SessionDetectAiEvent {
@@ -27,6 +29,7 @@ export interface SessionDetectAiEvent {
   repoSlug: string;
   taskLogId: string;
   cwd: string;
+  aiPlatform: 'claude-code' | 'copilot-cli' | 'copilot-chat';
 }
 
 export type SessionEvent = SessionCreatedEvent | SessionEndedEvent | SessionDetectAiEvent;
@@ -57,15 +60,14 @@ export class SessionIndexManager {
     switch (event.type) {
       case 'session_created':
         this.createSession(event.repoSlug, event.taskLogId, event.sessionId);
-        this.startAiDetectionPolling(event.repoSlug, event.taskLogId, event.cwd);
+        this.startAiDetectionPolling(event.repoSlug, event.taskLogId, event.cwd, event.aiPlatform);
         break;
       case 'session_ended':
         this.stopAiDetectionPolling(event.taskLogId);
-        this.endSession(event.repoSlug, event.taskLogId, event.cwd);
+        this.endSession(event.repoSlug, event.taskLogId, event.cwd, event.aiPlatform);
         break;
       case 'session_detect_ai':
-        // One-shot detect (backward compat, shouldn't normally be used)
-        this.detectAndWriteAiSessions(event.repoSlug, event.taskLogId, event.cwd);
+        this.detectAndWriteAiSessions(event.repoSlug, event.taskLogId, event.cwd, event.aiPlatform);
         break;
     }
   }
@@ -97,7 +99,7 @@ export class SessionIndexManager {
     }
   }
 
-  private endSession(repoSlug: string, taskLogId: string, cwd: string): void {
+  private endSession(repoSlug: string, taskLogId: string, cwd: string, aiPlatform: string): void {
     try {
       const index = this.readIndex();
       const taskEntry = index[repoSlug]?.[taskLogId];
@@ -108,9 +110,9 @@ export class SessionIndexManager {
 
       // Detect AI sessions if not already set
       if (!latest.aiSessions || latest.aiSessions.length === 0) {
-        const aiSessions = detectAiSessions(cwd, taskLogId);
-        if (aiSessions.length > 0) {
-          latest.aiSessions = aiSessions;
+        const aiSession = this.detectForPlatform(cwd, taskLogId, aiPlatform);
+        if (aiSession) {
+          latest.aiSessions = [aiSession];
           changed = true;
         }
       }
@@ -130,7 +132,7 @@ export class SessionIndexManager {
   }
 
   /** @returns true if AI sessions were found */
-  private detectAndWriteAiSessions(repoSlug: string, taskLogId: string, cwd: string): boolean {
+  private detectAndWriteAiSessions(repoSlug: string, taskLogId: string, cwd: string, aiPlatform: string): boolean {
     try {
       const index = this.readIndex();
       const taskEntry = index[repoSlug]?.[taskLogId];
@@ -139,9 +141,9 @@ export class SessionIndexManager {
       const latest = taskEntry.sessions[taskEntry.sessions.length - 1];
       if (latest.aiSessions && latest.aiSessions.length > 0) return true; // Already detected
 
-      const aiSessions = detectAiSessions(cwd, taskLogId);
-      if (aiSessions.length > 0) {
-        latest.aiSessions = aiSessions;
+      const aiSession = this.detectForPlatform(cwd, taskLogId, aiPlatform);
+      if (aiSession) {
+        latest.aiSessions = [aiSession];
         this.writeIndex(index);
         return true;
       }
@@ -151,18 +153,31 @@ export class SessionIndexManager {
     }
   }
 
+  /** Detect AI session for the specific platform only */
+  private detectForPlatform(cwd: string, taskLogId: string, aiPlatform: string): AiSession | null {
+    try {
+      if (aiPlatform === 'claude-code') {
+        return detectClaudeSession(cwd, taskLogId);
+      } else {
+        return detectCopilotSession(taskLogId);
+      }
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Poll for AI session files every 10s until detected or max retries reached.
    * Claude/Copilot session files may take time to appear on disk.
    */
-  private startAiDetectionPolling(repoSlug: string, taskLogId: string, cwd: string): void {
+  private startAiDetectionPolling(repoSlug: string, taskLogId: string, cwd: string, aiPlatform: string): void {
     // Stop any existing poller for this task
     this.stopAiDetectionPolling(taskLogId);
 
     let retries = 0;
     const interval = setInterval(() => {
       retries++;
-      const found = this.detectAndWriteAiSessions(repoSlug, taskLogId, cwd);
+      const found = this.detectAndWriteAiSessions(repoSlug, taskLogId, cwd, aiPlatform);
       if (found || retries >= SessionIndexManager.AI_DETECT_MAX_RETRIES) {
         this.stopAiDetectionPolling(taskLogId);
       }
