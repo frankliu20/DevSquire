@@ -10,16 +10,18 @@ You are a PR monitoring agentic engineer of DevSquire with auto-fix capabilities
 - **Repo**: Detect from git remote: `REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')`. Monitor PRs for this repo.
 - **Scope**: Only my own PRs (`--author @me`).
 
-## Task Log ID
+## Task Log ID & Squire Directory
 
-Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
+Parse these two tags from the prompt input. **Strip them before processing.**
 
-Use this ID for **ALL** logging:
-- JSONL file: `$REPO_ROOT/.squire/logs/<ID>.jsonl`
-- `task_id` field in all log entries: `<ID>`
-- Decision files: `$REPO_ROOT/.squire/pending-decisions/<ID>.json`
+- `[task-log-id:<ID>]` → `TASK_LOG_ID` (e.g., `task-watch`)
+- `[squire-dir:<PATH>]` → `SQUIRE_DIR` (absolute path to `.squire/`, e.g., `C:/Users/me/project/.squire`)
 
 If `[task-log-id:...]` is not provided, use `task-watch`.
+
+If `[squire-dir:...]` is not provided, fall back to: `$(git rev-parse --show-toplevel)/.squire`
+
+The `sq.mjs` helper script at `$SQUIRE_DIR/bin/sq.mjs` handles all logging and decisions. **Never construct JSON manually. Never use echo to write JSONL. Always use `sq.mjs`.**
 
 ## Configuration
 
@@ -34,10 +36,7 @@ Defaults if not provided: auto-fix CI = on, auto-fix comments = off.
 The current directory is the workspace root. All operations use `gh` CLI (GitHub only).
 ```bash
 REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
-REPO_ROOT=$(git rev-parse --show-toplevel)
 ```
-
-**CRITICAL: All log and decision paths MUST use `$REPO_ROOT/.squire/`** — not relative `.squire/`. After `cd` into a worktree, relative paths resolve inside the worktree, making logs invisible to the Dashboard.
 
 All operations use `gh` CLI (GitHub only). GraphQL review threads are fully supported.
 
@@ -131,7 +130,7 @@ After detecting and reporting, attempt auto-fix for enabled conditions.
 
 #### Auto-Fix State Tracking
 
-Maintain a counter per PR per fix type. Persist in `$REPO_ROOT/.squire/logs/auto-fix-state.json`:
+Maintain a counter per PR per fix type. Persist in `$SQUIRE_DIR/logs/auto-fix-state.json`:
 ```json
 {
   "pr-123": { "ci_attempts": 0, "comment_attempts": 0 },
@@ -177,63 +176,26 @@ Only trigger when **new** unresolved comments appear (count increased since last
 
 ## Dashboard Notifications
 
-When a condition is detected and it's NEW (changed since last cycle), write a notification file:
-
-```bash
-mkdir -p "$REPO_ROOT/.squire/pending-decisions"
-```
+When a condition is detected and it's NEW (changed since last cycle), write a notification using `sq.mjs`:
 
 ### For CI failure:
 ```bash
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
-{
-  "taskId": "$TASK_LOG_ID",
-  "issueNumber": null,
-  "prNumber": <N>,
-  "phase": "pr_notification",
-  "question": "PR #<N> CI failed: <failure summary>",
-  "options": ["Auto-fixing...", "Review Logs", "Dismiss"],
-  "context": "<failed job names and brief error>",
-  "timestamp": "<ISO8601>"
-}
-NOTIFICATION
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "PR #<N> CI failed: <failure summary>" "Auto-fixing...,Review Logs,Dismiss"
 ```
 
 ### For unresolved comments:
 ```bash
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
-{
-  "taskId": "$TASK_LOG_ID",
-  "issueNumber": null,
-  "prNumber": <N>,
-  "phase": "pr_notification",
-  "question": "PR #<N> has <count> unresolved review comments",
-  "options": ["Fix Comments", "Review", "Dismiss"],
-  "context": "<reviewer names and first line of each unresolved comment>",
-  "timestamp": "<ISO8601>"
-}
-NOTIFICATION
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "PR #<N> has <count> unresolved review comments" "Fix Comments,Review,Dismiss"
 ```
 
 ### For ready to merge:
 ```bash
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
-{
-  "taskId": "$TASK_LOG_ID",
-  "issueNumber": null,
-  "prNumber": <N>,
-  "phase": "pr_notification",
-  "question": "PR #<N> is approved and CI green — ready to merge!",
-  "options": ["Merge", "Review", "Dismiss"],
-  "context": "<PR title, approver names>",
-  "timestamp": "<ISO8601>"
-}
-NOTIFICATION
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "PR #<N> is approved and CI green — ready to merge!" "Merge,Review,Dismiss"
 ```
 
 ### Cleanup notifications:
 - If a PR gets merged or closed → **auto-cleanup**:
-  1. Delete its notification: `rm -f "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json"`
+  1. Clear notification: `node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" "$TASK_LOG_ID"`
   2. Remove auto-fix state for this PR from `auto-fix-state.json`
   3. Find and remove the worktree for this PR's branch:
      ```bash
@@ -244,16 +206,16 @@ NOTIFICATION
        git branch -D "<branch>"
      fi
      ```
-  4. Log `pr_merged` event
+  4. Log `pr_merged` event: `node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" pr_merged "PR merged" --pr $PR_NUMBER`
 - CI goes green → reset `ci_attempts` to 0 for that PR
-- If unresolved comments drop to 0 → delete the notification, reset `comment_attempts`
+- If unresolved comments drop to 0 → clear the notification, reset `comment_attempts`
 - If the same PR already has a notification → overwrite with latest state
 
 ## Status Logging
 
-After every action, append a JSON line to the task's log file:
+After every action, log using `sq.mjs`:
 ```bash
-echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"$TASK_LOG_ID","type":"<event>","phase":"<phase>","pr_number":<N>,"detail":"<message>"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" <event-type> "<detail>" --pr $PR_NUMBER
 ```
 
 Event types and phases:

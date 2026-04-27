@@ -24,123 +24,94 @@ When `--test-scenario` is provided in **auto mode**: ignored — auto mode alway
 
 Strip `--auto` and `--test-scenario <id>` from the input before processing the issue URL/description.
 
-## Task Log ID
+## Task Log ID & Squire Directory
 
-Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
+Parse these two tags from the prompt input. **Strip them before processing the issue URL/description.**
 
-Use this ID for **ALL** logging:
-- JSONL file: `$REPO_ROOT/.squire/logs/<ID>.jsonl`
-- `task_id` field in all log entries: `<ID>`
-- Decision files: `$REPO_ROOT/.squire/pending-decisions/<ID>.json`
+- `[task-log-id:<ID>]` → `TASK_LOG_ID` (e.g., `task-issue-123`)
+- `[squire-dir:<PATH>]` → `SQUIRE_DIR` (absolute path to `.squire/`, e.g., `C:/Users/me/project/.squire`)
 
 If `[task-log-id:...]` is not provided, derive the ID:
 - Issue URL with number → `task-issue-<N>`
 - Plain text / adhoc → `task-adhoc-<date>`
 
-Example: `[task-log-id:task-issue-123] --auto https://github.com/org/repo/issues/123`
-→ `TASK_LOG_ID=task-issue-123`, mode=auto, issue URL = `https://github.com/org/repo/issues/123`
+If `[squire-dir:...]` is not provided, fall back to: `$(git rev-parse --show-toplevel)/.squire`
+
+The `sq.mjs` helper script at `$SQUIRE_DIR/bin/sq.mjs` handles all logging and decisions. **Never construct JSON manually. Never use echo to write JSONL. Always use `sq.mjs`.**
+
+Example: `[task-log-id:task-issue-123] [squire-dir:C:/Users/me/project/.squire] --auto https://github.com/org/repo/issues/123`
+→ `TASK_LOG_ID=task-issue-123`, `SQUIRE_DIR=C:/Users/me/project/.squire`, mode=auto
 
 ## Workspace
 
-Detect the repo slug and **repo root** from git remote:
+Detect the repo slug from git remote:
 ```bash
 REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
-REPO_ROOT=$(git rev-parse --show-toplevel)
 ```
 
 All operations use `gh` CLI (GitHub only).
 - The current directory is the workspace root (or worktree).
-- **CRITICAL: Logs and decisions are ALWAYS written to `$REPO_ROOT/.squire/`** — the repo root, NOT the current working directory. After `cd` into a worktree, relative paths like `.squire/logs/` resolve inside the worktree, which is WRONG. Always use `"$REPO_ROOT/.squire/logs/"` and `"$REPO_ROOT/.squire/pending-decisions/"` for all log and decision file paths.
-- Worktrees are created under `$REPO_ROOT/.squire/worktrees/`.
+- Worktrees are created under `$SQUIRE_DIR/worktrees/`.
 - **Always `cd` into the correct worktree directory before running any git/build/test commands.**
-
-**Status log**: Throughout every phase, write status updates to per-task log files under `$REPO_ROOT/.squire/logs/` (one file per task, e.g., `task-issue-123.jsonl`). Use the `$TASK_LOG_ID` parsed above. These logs are the single source of truth for all task/PR progress.
 
 ## Status Logging — MANDATORY
 
-**You MUST run an echo command at every phase transition listed below. This is not optional. The dashboard depends on these logs to show progress. If you skip logging, the user sees a stuck task.**
+**You MUST log at every phase transition. The dashboard depends on these logs. If you skip logging, the user sees a stuck task.**
 
-Log file: `$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl` — replace `$TASK_LOG_ID` with the actual value parsed from `[task-log-id:...]`.
+Use the `sq.mjs` helper — it handles timestamps, JSON format, and writes to the correct path regardless of your current directory:
 
-**Run the first log IMMEDIATELY when you start, before any other work:**
 ```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"task_start\",\"phase\":\"analyzing\",\"branch\":\"$BRANCH\",\"detail\":\"Starting issue analysis\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
-```
+# Shorthand: SQ="node $SQUIRE_DIR/bin/sq.mjs"
+# All commands use: node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" <event-type> <detail> [--branch X] [--pr N] [--pr-url U]
 
-Then log at each subsequent transition:
-```bash
+# Run IMMEDIATELY when you start, before any other work:
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" task_start "Starting issue analysis" --branch "$BRANCH"
+
 # Phase 1 done — issue understood:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"analysis_done\",\"phase\":\"exploring\",\"branch\":\"$BRANCH\",\"detail\":\"Issue analyzed\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" analysis_done "Issue analyzed" --branch "$BRANCH"
 
 # Phase 2 done — code explored:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"exploration_done\",\"phase\":\"planning\",\"branch\":\"$BRANCH\",\"detail\":\"Code explored\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" exploration_done "Code explored" --branch "$BRANCH"
 
 # Phase 3 done — plan approved:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"plan_approved\",\"phase\":\"implementing\",\"branch\":\"$BRANCH\",\"detail\":\"Plan approved\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" plan_approved "Plan approved" --branch "$BRANCH"
 
 # Phase 4 done — code written:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"implementation_done\",\"phase\":\"testing\",\"branch\":\"$BRANCH\",\"detail\":\"Implementation complete\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" implementation_done "Implementation complete" --branch "$BRANCH"
 
 # Phase 5 — tests passed:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"test_pass\",\"phase\":\"creating_pr\",\"branch\":\"$BRANCH\",\"detail\":\"Tests passed\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" test_pass "Tests passed" --branch "$BRANCH"
 
 # Phase 5 — tests failed:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"test_fail\",\"phase\":\"testing\",\"branch\":\"$BRANCH\",\"detail\":\"<error summary>\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" test_fail "<error summary>" --branch "$BRANCH"
 
 # Phase 6 — PR created:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"pr_created\",\"phase\":\"done\",\"branch\":\"$BRANCH\",\"pr_number\":$PR_NUM,\"detail\":\"PR created\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" pr_created "PR created" --branch "$BRANCH" --pr $PR_NUM
 
 # Blocked:
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"blocked\",\"phase\":\"failed\",\"branch\":\"$BRANCH\",\"detail\":\"<reason>\"}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
+node "$SQUIRE_DIR/bin/sq.mjs" log "$SQUIRE_DIR" "$TASK_LOG_ID" blocked "<reason>" --branch "$BRANCH"
 ```
 
-Replace `$TASK_LOG_ID`, `$BRANCH`, `$PR_NUM` with actual values. **Do not skip any of these logs.**
+Replace `$TASK_LOG_ID`, `$SQUIRE_DIR`, `$BRANCH`, `$PR_NUM` with actual values. **Do not skip any of these logs.**
 
 ## Decision Notifications
 
-**CRITICAL RULE**: Every single time you stop and wait for user input — for ANY reason, in ANY phase — you MUST write a decision notification file BEFORE prompting the user. The user may not be watching your terminal. The Dashboard will pop up a notification so they know you need attention.
+**CRITICAL RULE**: Every time you stop and wait for user input — for ANY reason — you MUST create a decision notification BEFORE prompting the user. The Dashboard will pop up a notification so the user knows you need attention.
 
-This applies to ALL situations where you ask the user a question or present options, including but not limited to:
-- Plan approval / test strategy selection
-- Suggesting to close an issue instead of coding
-- Asking for clarification on unclear requirements
-- Manual verification confirmation
-- Reporting test failures after 3 rounds
-- Proposing a fix approach when multiple options exist
-- **Any other prompt that waits for user response**
-
-If you are about to use `AskUserQuestion`, present options, or end your turn with a question — you MUST write the file first.
+This applies to: plan approval, clarification questions, test failures, manual verify, etc.
 
 ### How it works
 
-1. **Write a decision request file** to `$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json`:
+1. **Create the decision** (one command — writes both the notification file AND the JSONL log entry):
 ```bash
-mkdir -p "$REPO_ROOT/.squire/pending-decisions"
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'DECISION'
-{
-  "id": "$TASK_LOG_ID-<timestamp>",
-  "taskId": "$TASK_LOG_ID",
-  "type": "decision",
-  "title": "<short title, e.g. Plan Approval for Issue #N>",
-  "message": "<what you need from the user>",
-  "options": ["option1", "option2", "option3"],
-  "prNumber": null,
-  "prUrl": null,
-  "createdAt": "<ISO8601>"
-}
-DECISION
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Plan Approval for Issue #N" "Approve,Request changes"
 ```
 
-2. **Also log a status event** with type `decision_requested`:
-```bash
-echo '{"timestamp":"<ISO8601>","task_id":"$TASK_LOG_ID","type":"decision_requested","phase":"<phase>","branch":"<branch>","pr_number":null,"status":"waiting","detail":"<question summary>"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
-```
+2. **Then wait for user input** in the terminal as normal.
 
-3. **Then wait for user input in the terminal as normal** (the user will see the Dashboard notification and switch to your terminal to respond).
-
-4. **After user responds**, delete the pending decision file:
+3. **After user responds**, clear the decision:
 ```bash
-rm -f "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json"
+node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" "$TASK_LOG_ID"
 ```
 
 **Auto mode exception**: Never write decision requests — use defaults silently.
@@ -156,19 +127,7 @@ The user provides ONE of:
 
 **Before creating anything, check if there's already work in progress for this issue.**
 
-Each issue gets its own **git worktree** at `.squire/worktrees/issue-<N>/`, enabling parallel development across multiple issues.
-
-### Determine base repo path
-
-Extract the repo name from the issue URL (e.g., `my-project` from `https://github.com/org/my-project/issues/123`). 
-
-```bash
-# Repo is current directory
-```
-
-If the input is plain text (no URL), use the current directory:
-```bash
-```
+Each issue gets its own **git worktree** at `$SQUIRE_DIR/worktrees/issue-<N>/`, enabling parallel development across multiple issues.
 
 ### Step 1: Check for existing worktrees, branches, and PRs (run in parallel)
 ```bash
@@ -201,8 +160,8 @@ gh pr list --repo $REPO_SLUG \
   ```bash
   # already in repo
   git fetch origin
-  git worktree add ".squire/worktrees/issue-<N>" origin/<branch>
-  cd ".squire/worktrees/issue-<N>"
+  git worktree add "$SQUIRE_DIR/worktrees/issue-<N>" origin/<branch>
+  cd "$SQUIRE_DIR/worktrees/issue-<N>"
   ```
 
 **If an existing branch is found (no worktree, no PR):**
@@ -215,8 +174,8 @@ gh pr list --repo $REPO_SLUG \
 ```bash
 # already in repo
 git fetch origin
-git worktree add -b fix/issue-<number> ".squire/worktrees/issue-<number>" origin/main
-cd ".squire/worktrees/issue-<number>"
+git worktree add -b fix/issue-<number> "$SQUIRE_DIR/worktrees/issue-<number>" origin/main
+cd "$SQUIRE_DIR/worktrees/issue-<number>"
 ```
 Branch name: `fix/issue-<number>` (bug fix) or `feat/issue-<number>` (feature)
 
@@ -225,8 +184,8 @@ Branch name: `fix/issue-<number>` (bug fix) or `feat/issue-<number>` (feature)
 # already in repo
 git fetch origin
 TASK_ID="adhoc-$(date +%Y%m%d-%H%M%S)"
-git worktree add -b fix/$TASK_ID ".squire/worktrees/$TASK_ID" origin/main
-cd ".squire/worktrees/$TASK_ID"
+git worktree add -b fix/$TASK_ID "$SQUIRE_DIR/worktrees/$TASK_ID" origin/main
+cd "$SQUIRE_DIR/worktrees/$TASK_ID"
 ```
 Branch name: `fix/adhoc-20260405-143022` or `feat/adhoc-20260405-143022`
 
@@ -320,7 +279,11 @@ Approve the plan to proceed? (y/n)
 ```
 After approval, proceed to Phase 4 with the pre-selected strategy. The user can override by typing a different strategy number.
 
-**Otherwise (no `--test-scenario`)**, write a decision notification file (see "Decision Notifications" section above) so the Dashboard can alert the user that this task needs attention, then prompt:
+**Otherwise (no `--test-scenario`)**, create a decision notification so the Dashboard can alert the user:
+```bash
+node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Plan Approval" "Approve,Request changes"
+```
+Then prompt:
 
 ```
 Plan is ready. How should we verify the changes?
@@ -334,7 +297,10 @@ Pick 1/2/3 (default: 1):
 
 **Wait for user to approve the plan AND choose a test strategy before proceeding.**
 If the user just approves without picking, use strategy 1 (build only).
-After user responds, delete the pending decision file.
+After user responds, clear the decision:
+```bash
+node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" "$TASK_LOG_ID"
+```
 
 ## Phase 4: Implementation
 
@@ -378,9 +344,9 @@ If the file does not exist or a field is missing, auto-detect from project files
 - Run build + impacted tests (same as strategy 2)
 - If either fails: auto-fix up to 3 rounds
 - All pass → prepare the manual verify environment and STOP:
-  - **Before prompting the user**, write a decision notification file (see "Decision Notifications" section).
+  - Create a decision: `node "$SQUIRE_DIR/bin/sq.mjs" decision "$SQUIRE_DIR" "$TASK_LOG_ID" "Manual Verify" "OK,Has issues"`
   - Wait for user to reply "ok" or describe issues to fix.
-  - After user responds, delete the pending decision file.
+  - After user responds: `node "$SQUIRE_DIR/bin/sq.mjs" decision-clear "$SQUIRE_DIR" "$TASK_LOG_ID"`
 
 If auto-fix fails after 3 rounds on any strategy:
 - STOP and report to the user with error details.
