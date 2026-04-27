@@ -78,12 +78,12 @@ export function parseClaudeLastPrompt(tail: string): { lastPrompt: string; sessi
 
 /**
  * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/*.jsonl.
- * Reads the tail of each file and parses the last-prompt entry to match taskLogId
- * and extract the sessionId directly.
+ * Matches by sessionId (dsq-xxx) injected via [session-id:...] tag in the prompt.
+ * Reads tail (last-prompt) then head (first user message) for matching.
  *
  * Claude encodes the cwd into a directory name by replacing : . \ / with -
  */
-export function detectClaudeSession(cwd: string, taskLogId: string): AiSession | null {
+export function detectClaudeSession(cwd: string, sessionId: string): AiSession | null {
   try {
     const encodedCwd = cwd.replace(/[:\.\\/]/g, '-');
     const projectDir = path.join(os.homedir(), '.claude', 'projects', encodedCwd);
@@ -99,17 +99,17 @@ export function detectClaudeSession(cwd: string, taskLogId: string): AiSession |
 
     for (const file of sorted) {
       const filePath = path.join(projectDir, file.name);
-      // Fast path: parse last-prompt from tail (has sessionId)
+      // Fast path: parse last-prompt from tail
       const tail = readTail(filePath);
       const lastPrompt = parseClaudeLastPrompt(tail);
-      if (lastPrompt && lastPrompt.lastPrompt.includes(taskLogId)) {
+      if (lastPrompt && lastPrompt.lastPrompt.includes(sessionId)) {
         return { source: 'claude', id: lastPrompt.sessionId, resumable: true };
       }
-      // Fallback: check head for taskLogId in first user message
+      // Fallback: check head for sessionId in first user message
       const head = readHead(filePath);
-      if (contentMatchesTaskLogId(head, taskLogId)) {
-        const sessionId = file.name.replace('.jsonl', '');
-        return { source: 'claude', id: sessionId, resumable: true };
+      if (contentMatchesTaskLogId(head, sessionId)) {
+        const claudeSessionId = file.name.replace('.jsonl', '');
+        return { source: 'claude', id: claudeSessionId, resumable: true };
       }
     }
     return null;
@@ -120,9 +120,9 @@ export function detectClaudeSession(cwd: string, taskLogId: string): AiSession |
 
 /**
  * Detect Copilot AI sessions by scanning ~/.copilot/session-state/{id}/events.jsonl
- * for sessions whose content contains the taskLogId.
+ * for sessions whose content contains the sessionId (dsq-xxx).
  */
-export function detectCopilotSession(taskLogId: string): AiSession | null {
+export function detectCopilotSession(sessionId: string): AiSession | null {
   const sessionStateDir = path.join(os.homedir(), '.copilot', 'session-state');
   try {
     if (!fs.existsSync(sessionStateDir)) return null;
@@ -133,7 +133,7 @@ export function detectCopilotSession(taskLogId: string): AiSession | null {
       try {
         if (!fs.existsSync(eventsPath)) continue;
         const content = fs.readFileSync(eventsPath, 'utf-8');
-        if (contentMatchesTaskLogId(content, taskLogId)) {
+        if (contentMatchesTaskLogId(content, sessionId)) {
           const yamlPath = path.join(sessionStateDir, dir, 'workspace.yaml');
           if (fs.existsSync(yamlPath)) {
             const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
@@ -154,20 +154,3 @@ export function detectCopilotSession(taskLogId: string): AiSession | null {
   }
 }
 
-/**
- * Detect all AI sessions. Tries both Claude and Copilot adapters.
- * Both use taskLogId matching on session log content.
- * Returns empty array on failure — never throws.
- */
-export function detectAiSessions(cwd: string, taskLogId: string): AiSession[] {
-  const sessions: AiSession[] = [];
-  try {
-    const claude = detectClaudeSession(cwd, taskLogId);
-    if (claude) sessions.push(claude);
-  } catch { /* graceful fallback */ }
-  try {
-    const copilot = detectCopilotSession(taskLogId);
-    if (copilot) sessions.push(copilot);
-  } catch { /* graceful fallback */ }
-  return sessions;
-}
