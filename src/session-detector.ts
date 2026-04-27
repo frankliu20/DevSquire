@@ -30,6 +30,19 @@ export function parseCopilotWorkspaceYaml(content: string): string | null {
 }
 
 /**
+ * Read the head of a file (first N bytes).
+ */
+function readHead(filePath: string, bytes: number = 4096): string {
+  const stat = fs.statSync(filePath);
+  if (stat.size <= bytes) return fs.readFileSync(filePath, 'utf-8');
+  const fd = fs.openSync(filePath, 'r');
+  const buf = Buffer.alloc(bytes);
+  fs.readSync(fd, buf, 0, bytes, 0);
+  fs.closeSync(fd);
+  return buf.toString('utf-8');
+}
+
+/**
  * Read the tail of a file (last N bytes) to avoid reading huge JSONL files.
  */
 function readTail(filePath: string, bytes: number = 4096): string {
@@ -85,10 +98,18 @@ export function detectClaudeSession(cwd: string, taskLogId: string): AiSession |
       .sort((a, b) => b.mtime - a.mtime);
 
     for (const file of sorted) {
-      const tail = readTail(path.join(projectDir, file.name));
+      const filePath = path.join(projectDir, file.name);
+      // Fast path: parse last-prompt from tail (has sessionId)
+      const tail = readTail(filePath);
       const lastPrompt = parseClaudeLastPrompt(tail);
       if (lastPrompt && lastPrompt.lastPrompt.includes(taskLogId)) {
         return { source: 'claude', id: lastPrompt.sessionId, resumable: true };
+      }
+      // Fallback: check head for taskLogId in first user message
+      const head = readHead(filePath);
+      if (contentMatchesTaskLogId(head, taskLogId)) {
+        const sessionId = file.name.replace('.jsonl', '');
+        return { source: 'claude', id: sessionId, resumable: true };
       }
     }
     return null;
