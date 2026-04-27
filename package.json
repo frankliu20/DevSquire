@@ -2,7 +2,7 @@
   "name": "devsquire-vscode",
   "displayName": "DevSquire — Agentic Engineer",
   "description": "Agentic engineering team for VS Code — autonomously develops issues, reviews PRs, and monitors CI with worktree isolation",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "frankliu20",
   "author": {
     "name": "Frank Liu",
