@@ -25,9 +25,9 @@ Strip `--auto` and `--test-scenario <id>` from input before processing.
 Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
 
 Use this ID for **ALL** logging:
-- JSONL file: `.squire/logs/<ID>.jsonl`
+- JSONL file: `$REPO_ROOT/.squire/logs/<ID>.jsonl`
 - `task_id` field in all log entries: `<ID>`
-- Decision files: `.squire/pending-decisions/<ID>.json`
+- Decision files: `$REPO_ROOT/.squire/pending-decisions/<ID>.json`
 
 If `[task-log-id:...]` is not provided, derive the ID:
 - Issue URL with number → `task-issue-<N>`
@@ -35,52 +35,53 @@ If `[task-log-id:...]` is not provided, derive the ID:
 
 ## Workspace
 
-Detect the repo slug from git remote:
+Detect the repo slug and **repo root** from git remote:
 ```bash
 REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
+REPO_ROOT=$(git rev-parse --show-toplevel)
 ```
 
 All operations use `gh` CLI (GitHub only).
 - The current directory is the workspace root (or worktree).
-- Logs are stored under `.squire/logs/`.
+- **CRITICAL: Logs and decisions are ALWAYS written to `$REPO_ROOT/.squire/`** — the repo root, NOT the current working directory. After `EnterWorktree`, relative paths like `.squire/logs/` resolve inside the worktree, which is WRONG. Always use `"$REPO_ROOT/.squire/logs/"` and `"$REPO_ROOT/.squire/pending-decisions/"` for all log and decision file paths.
 - **Always `cd` into the correct worktree directory before running any git/build/test commands.**
 
 ## Status Logging — MANDATORY
 
 **You MUST run an echo command at every phase transition listed below. This is not optional. The dashboard depends on these logs to show progress.**
 
-Log file: `.squire/logs/$TASK_LOG_ID.jsonl`
+Log file: `$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl`
 
 **Run the first log IMMEDIATELY when you start, before any other work:**
 ```bash
-echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"'"$TASK_LOG_ID"'","type":"task_start","phase":"analyzing","branch":"'"$BRANCH"'","detail":"Starting issue analysis"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","task_id":"'"$TASK_LOG_ID"'","type":"task_start","phase":"analyzing","branch":"'"$BRANCH"'","detail":"Starting issue analysis"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Then log at each subsequent transition:
 ```bash
 # Phase 1 done:
-echo '{"timestamp":"...","task_id":"...","type":"analysis_done","phase":"exploring","branch":"...","detail":"Issue analyzed"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"analysis_done","phase":"exploring","branch":"...","detail":"Issue analyzed"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Phase 2 done:
-echo '{"timestamp":"...","task_id":"...","type":"exploration_done","phase":"planning","branch":"...","detail":"Code explored"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"exploration_done","phase":"planning","branch":"...","detail":"Code explored"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Phase 3 done:
-echo '{"timestamp":"...","task_id":"...","type":"plan_approved","phase":"implementing","branch":"...","detail":"Plan approved"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"plan_approved","phase":"implementing","branch":"...","detail":"Plan approved"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Phase 4 done:
-echo '{"timestamp":"...","task_id":"...","type":"implementation_done","phase":"testing","branch":"...","detail":"Implementation complete"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"implementation_done","phase":"testing","branch":"...","detail":"Implementation complete"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Phase 5 — tests passed:
-echo '{"timestamp":"...","task_id":"...","type":"test_pass","phase":"creating_pr","branch":"...","detail":"Tests passed"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"test_pass","phase":"creating_pr","branch":"...","detail":"Tests passed"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Phase 5 — tests failed:
-echo '{"timestamp":"...","task_id":"...","type":"test_fail","phase":"testing","branch":"...","detail":"<error summary>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"test_fail","phase":"testing","branch":"...","detail":"<error summary>"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Phase 6 — PR created:
-echo '{"timestamp":"...","task_id":"...","type":"pr_created","phase":"done","branch":"...","pr_number":N,"detail":"PR created"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"pr_created","phase":"done","branch":"...","pr_number":N,"detail":"PR created"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 
 # Blocked:
-echo '{"timestamp":"...","task_id":"...","type":"blocked","phase":"failed","branch":"...","detail":"<reason>"}' >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo '{"timestamp":"...","task_id":"...","type":"blocked","phase":"failed","branch":"...","detail":"<reason>"}' >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Replace all `...` with actual values. **Do not skip any of these logs.**
@@ -89,10 +90,10 @@ Replace all `...` with actual values. **Do not skip any of these logs.**
 
 **CRITICAL RULE**: Every time you stop and wait for user input — for ANY reason — you MUST write a decision notification file BEFORE prompting the user. The Dashboard will pop up a notification.
 
-1. **Write a decision request file** to `.squire/pending-decisions/$TASK_LOG_ID.json`:
+1. **Write a decision request file** to `$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json`:
 ```bash
-mkdir -p ".squire/pending-decisions"
-cat > ".squire/pending-decisions/$TASK_LOG_ID.json" << 'DECISION'
+mkdir -p "$REPO_ROOT/.squire/pending-decisions"
+cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'DECISION'
 {
   "id": "$TASK_LOG_ID-<timestamp>",
   "taskId": "$TASK_LOG_ID",
@@ -107,7 +108,7 @@ DECISION
 
 2. **Also log** a `decision_requested` event to the JSONL file.
 
-3. **After user responds**, delete: `rm -f ".squire/pending-decisions/$TASK_LOG_ID.json"`
+3. **After user responds**, delete: `rm -f "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json"`
 
 **Auto mode exception**: Never write decision requests — use defaults silently.
 
