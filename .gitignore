@@ -4,6 +4,7 @@ dist/
 .vscode-test/
 .squire/
 claude/
+!framework/commands/claude/
 CLAUDE.md
 .env*
 *.pem

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import { SquireBackend, AgentLaunchOptions, PromptLaunchOptions } from '../backend';
+import { SquireBackend, AgentLaunchOptions, PromptLaunchOptions, COMMAND_AGENT_NAMES } from '../backend';
 
 /**
  * Claude Code backend.
@@ -14,15 +14,8 @@ import { SquireBackend, AgentLaunchOptions, PromptLaunchOptions } from '../backe
 export class ClaudeCodeBackend implements SquireBackend {
   readonly type = 'claude-code' as const;
 
-  /** Agent names that are synced as commands (triggered via /name) */
-  private static readonly COMMAND_AGENTS = new Set([
-    'squire-dev-issue',
-    'squire-watch-pr',
-    'squire-pr-reviewer',
-  ]);
-
   launchAgent(options: AgentLaunchOptions): void {
-    if (ClaudeCodeBackend.COMMAND_AGENTS.has(options.agentName)) {
+    if (COMMAND_AGENT_NAMES.has(options.agentName)) {
       // Commands: launched via slash command
       const prompt = options.initialPrompt ? ` ${options.initialPrompt}` : '';
       options.terminal.sendText(

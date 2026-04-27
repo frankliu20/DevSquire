@@ -4,6 +4,16 @@ import * as os from 'os';
 
 export type BackendType = 'copilot-cli' | 'claude-code' | 'copilot-chat';
 
+/**
+ * Agent names that are installed as commands (slash commands) rather than agents
+ * for backends that support separate command directories (e.g., Claude Code).
+ */
+export const COMMAND_AGENT_NAMES = new Set([
+  'squire-dev-issue',
+  'squire-watch-pr',
+  'squire-pr-reviewer',
+]);
+
 export interface AgentLaunchOptions {
   terminal: vscode.Terminal;
   agentName: string;
