@@ -582,11 +582,15 @@ export class TaskRunner {
 
     terminal.show(false);
 
-    // Inject task-log-id and squire-dir so agents write to the correct location.
+    // Generate session ID early so it can be injected into the prompt
+    const sessionId = SessionIndexManager.generateSessionId();
+
+    // Inject task-log-id, session-id, and squire-dir so agents write to the correct location.
     // Use bracket syntax appended at the END to avoid interfering with CLI flag parsing.
     const logIdTag = `[task-log-id:${taskLogId}]`;
+    const sessionIdTag = `[session-id:${sessionId}]`;
     const squireDirTag = `[squire-dir:${this.squireDir.dir.replace(/\\/g, '/')}]`;
-    const tags = `${logIdTag} ${squireDirTag}`;
+    const tags = `${logIdTag} ${sessionIdTag} ${squireDirTag}`;
     if (launch.agent && launch.initialPrompt) {
       launch.initialPrompt = `${launch.initialPrompt} ${tags}`;
     } else if (launch.agent) {
@@ -611,7 +615,6 @@ export class TaskRunner {
     this._onTasksChanged.fire();
 
     // Fire session_created event — SessionIndexManager handles the index write
-    const sessionId = SessionIndexManager.generateSessionId();
     this._onSessionEvent.fire({
       type: 'session_created',
       repoSlug: this.repoSlug,
