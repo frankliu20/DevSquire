@@ -9,23 +9,12 @@ export interface AiSession {
 }
 
 /**
- * Parse a Claude session JSON file and return the sessionId if it matches the given cwd.
+ * Check if file content contains the given taskLogId (via [task-log-id:...] tag).
+ * Used by both Claude and Copilot detectors.
  * Exported for testing.
  */
-export function parseClaudeSessionFile(content: string, cwd: string): string | null {
-  try {
-    const data = JSON.parse(content);
-    if (!data.sessionId || !data.cwd) return null;
-    // Normalize paths for comparison (handle Windows vs Unix)
-    const normalizedCwd = cwd.replace(/\\/g, '/').toLowerCase();
-    const normalizedSessionCwd = String(data.cwd).replace(/\\/g, '/').toLowerCase();
-    if (normalizedSessionCwd === normalizedCwd) {
-      return data.sessionId;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+export function contentMatchesTaskLogId(content: string, taskLogId: string): boolean {
+  return content.includes(taskLogId);
 }
 
 /**
@@ -33,7 +22,6 @@ export function parseClaudeSessionFile(content: string, cwd: string): string | n
  * Exported for testing.
  */
 export function parseCopilotWorkspaceYaml(content: string): string | null {
-  // Simple YAML parsing — extract `id:` field from top level
   for (const line of content.split('\n')) {
     const match = line.match(/^id:\s*(.+)$/);
     if (match) return match[1].trim();
@@ -42,20 +30,13 @@ export function parseCopilotWorkspaceYaml(content: string): string | null {
 }
 
 /**
- * Check if a Copilot events.jsonl contains a reference to the given taskLogId.
- * Exported for testing.
- */
-export function copilotEventsMatchTaskLogId(content: string, taskLogId: string): boolean {
-  return content.includes(taskLogId);
-}
-
-/**
- * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/
- * for session JSONL files. The filename (minus .jsonl) is the session ID.
+ * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/*.jsonl
+ * for session files whose content contains the taskLogId.
  *
  * Claude encodes the cwd into a directory name by replacing : \ / . with -
+ * The JSONL filename (minus .jsonl) is the Claude session ID.
  */
-export function detectClaudeSession(cwd: string): AiSession | null {
+export function detectClaudeSession(cwd: string, taskLogId: string): AiSession | null {
   try {
     const encodedCwd = cwd.replace(/[:\\/\.]/g, '-');
     const projectDir = path.join(os.homedir(), '.claude', 'projects', encodedCwd);
@@ -64,27 +45,27 @@ export function detectClaudeSession(cwd: string): AiSession | null {
     const jsonlFiles = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
     if (jsonlFiles.length === 0) return null;
 
-    // Pick the most recently modified .jsonl — that's the latest session
-    let bestFile = '';
-    let bestMtime = 0;
-    for (const file of jsonlFiles) {
-      const stat = fs.statSync(path.join(projectDir, file));
-      if (stat.mtimeMs > bestMtime) {
-        bestMtime = stat.mtimeMs;
-        bestFile = file;
+    // Sort by mtime descending — check most recent first for efficiency
+    const sorted = jsonlFiles
+      .map(f => ({ name: f, mtime: fs.statSync(path.join(projectDir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+
+    for (const file of sorted) {
+      const content = fs.readFileSync(path.join(projectDir, file.name), 'utf-8');
+      if (contentMatchesTaskLogId(content, taskLogId)) {
+        const sessionId = file.name.replace('.jsonl', '');
+        return { source: 'claude', id: sessionId, resumable: true };
       }
     }
-
-    const sessionId = bestFile.replace('.jsonl', '');
-    return { source: 'claude', id: sessionId, resumable: true };
+    return null;
   } catch {
     return null;
   }
 }
 
 /**
- * Detect Copilot AI sessions by scanning ~/.copilot/session-state/
- * for sessions whose events.jsonl references the given taskLogId.
+ * Detect Copilot AI sessions by scanning ~/.copilot/session-state/{id}/events.jsonl
+ * for sessions whose content contains the taskLogId.
  */
 export function detectCopilotSession(taskLogId: string): AiSession | null {
   const sessionStateDir = path.join(os.homedir(), '.copilot', 'session-state');
@@ -96,9 +77,8 @@ export function detectCopilotSession(taskLogId: string): AiSession | null {
       const eventsPath = path.join(sessionStateDir, dir, 'events.jsonl');
       try {
         if (!fs.existsSync(eventsPath)) continue;
-        const eventsContent = fs.readFileSync(eventsPath, 'utf-8');
-        if (copilotEventsMatchTaskLogId(eventsContent, taskLogId)) {
-          // Found matching session — extract id from workspace.yaml
+        const content = fs.readFileSync(eventsPath, 'utf-8');
+        if (contentMatchesTaskLogId(content, taskLogId)) {
           const yamlPath = path.join(sessionStateDir, dir, 'workspace.yaml');
           if (fs.existsSync(yamlPath)) {
             const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
@@ -107,11 +87,9 @@ export function detectCopilotSession(taskLogId: string): AiSession | null {
               return { source: 'copilot', id: sessionId, resumable: false };
             }
           }
-          // Fallback: use directory name as session id
           return { source: 'copilot', id: dir, resumable: false };
         }
       } catch {
-        // Skip unreadable session directories
         continue;
       }
     }
@@ -123,12 +101,13 @@ export function detectCopilotSession(taskLogId: string): AiSession | null {
 
 /**
  * Detect all AI sessions. Tries both Claude and Copilot adapters.
+ * Both use taskLogId matching on session log content.
  * Returns empty array on failure — never throws.
  */
 export function detectAiSessions(cwd: string, taskLogId: string): AiSession[] {
   const sessions: AiSession[] = [];
   try {
-    const claude = detectClaudeSession(cwd);
+    const claude = detectClaudeSession(cwd, taskLogId);
     if (claude) sessions.push(claude);
   } catch { /* graceful fallback */ }
   try {

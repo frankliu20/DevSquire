@@ -28,7 +28,7 @@ export async function activate(context: vscode.ExtensionContext) {
   squireDir.ensureGitignore();
 
   // Create backend from user setting
-  const backendType = vscode.workspace.getConfiguration('devSquire').get<BackendType>('aiPlatform', 'copilot-cli');
+  const backendType = vscode.workspace.getConfiguration('devSquire').get<BackendType>('aiPlatform', 'claude-code');
   const backend = createBackend(backendType);
   squireDir.log('extension', `Backend: ${backend.type}`);
 
