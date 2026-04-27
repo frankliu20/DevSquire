@@ -56,18 +56,22 @@ export class TaskRunner {
     vscode.window.onDidCloseTerminal((closedTerminal) => {
       for (const task of this.tasks.values()) {
         if (task.terminal === closedTerminal) {
-          task.status = 'completed';
-          // Write done event to JSONL so dashboard shows completion
-          // Skip for cyclic pipelines (watch-pr) — they don't have a terminal "done" state
+          // If stopTask already marked it completed, just clean up the terminal reference
+          if (task.status === 'completed') {
+            task.terminal = undefined;
+            this._onTasksChanged.fire();
+            break;
+          }
+          // Terminal closed unexpectedly — don't change task status (user may have killed it mid-run)
+          // Keep current status so the task shows a Resume button instead of marking as done
           if (task.type !== 'watch-pr') {
             const taskLogId = task.taskLogId || `task-${task.id}`;
             this.squireDir.logJson(taskLogId, {
-              event: 'task_completed',
-              phase: 'done',
+              event: 'terminal_closed',
+              phase: 'paused',
               task_id: taskLogId,
               type: task.type,
             });
-            // Write endedAt + detect AI sessions (fallback for 30s delayed detection)
             const cwd = task.worktreeDir || this.workspaceRoot;
             this.updateSessionIndex(taskLogId, cwd, true);
           }

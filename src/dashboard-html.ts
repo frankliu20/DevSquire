@@ -881,7 +881,7 @@ function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
 
-  // Categorize tasks into Issues, PRs, Other
+  // Categorize tasks into Issues, PRs, Adhoc
   const PR_TYPES = { 'review-pr': 1, 'watch-pr': 1, 'fix-comments': 1 };
   const issueGroups = {};  // issueNumber → { tasks, label }
   const prGroups = {};     // prNumber → { tasks, label }
@@ -893,7 +893,11 @@ function renderTasks(list) {
       if (!prGroups[t.prNumber]) prGroups[t.prNumber] = { tasks: [], label: t.label || 'PR #' + t.prNumber };
       prGroups[t.prNumber].tasks.push(t);
     } else if (issueNum) {
-      if (!issueGroups[issueNum]) issueGroups[issueNum] = { tasks: [], label: t.label || 'Issue #' + issueNum };
+      if (!issueGroups[issueNum]) {
+        // Extract description from label like "[Normal] Dev #42 Fix login bug" → "Fix login bug"
+        var desc = (t.label || '').replace(/^\[.*?\]\s*/, '').replace(/^Dev\s*#\d+\s*/, '');
+        issueGroups[issueNum] = { tasks: [], label: 'Issue #' + issueNum + (desc ? ' ' + desc : '') };
+      }
       issueGroups[issueNum].tasks.push(t);
     } else {
       otherTasks.push(t);
@@ -928,7 +932,7 @@ function renderTasks(list) {
       + '<span class="task-group-meta">' + group.tasks.length + ' task' + (group.tasks.length > 1 ? 's' : '') + '</span>'
       + groupStatusBadge(group.tasks)
       + '</summary>'
-      + '<div class="task-group-cards">' + group.tasks.map(renderTaskCard).join('') + '</div>'
+      + '<div class="task-group-cards">' + group.tasks.map(function(t) { t._inGroup = true; return renderTaskCard(t); }).join('') + '</div>'
       + '</details>';
   }
 
@@ -946,7 +950,7 @@ function renderTasks(list) {
   }
   if (otherTasks.length) {
     if (sortedIssues.length || sortedPRs.length) {
-      html += '<div class="task-section-header"><span class="section-icon">📦</span> Other</div>';
+      html += '<div class="task-section-header"><span class="section-icon">📦</span> Adhoc</div>';
     }
     html += otherTasks.map(renderTaskCard).join('');
   }
@@ -1034,10 +1038,32 @@ function renderTaskCard(t) {
           : '')
       : '';
 
+    // When inside a group, show "Session <id> [Claude/Copilot]" instead of the full label
+    var displayLabel = t.label || 'Task ' + t.id;
+    if (t._inGroup) {
+      var sessions = t.sessions || [];
+      var aiSource = '';
+      for (var si = 0; si < sessions.length; si++) {
+        var ais = sessions[si].aiSessions;
+        if (ais && ais.length) { aiSource = ais[0].source === 'claude' ? 'Claude' : 'Copilot'; break; }
+      }
+      var sessId = sessions.length && sessions[sessions.length - 1].id ? sessions[sessions.length - 1].id.slice(0, 12) : t.id.slice(0, 12);
+      displayLabel = 'Session ' + sessId + (aiSource ? ' [' + aiSource + ']' : '');
+    }
+
+    // Find resumable session for showing Resume button on task card
+    var resumable = null;
+    var taskSessions = t.sessions || [];
+    for (var ri = taskSessions.length - 1; ri >= 0; ri--) {
+      var rais = taskSessions[ri].aiSessions;
+      if (rais) { for (var rai = 0; rai < rais.length; rai++) { if (rais[rai].resumable) { resumable = rais[rai]; break; } } }
+      if (resumable) break;
+    }
+
     return \`
     <div class="task-card \${phaseClass}" onclick="toggleTaskEvents('\${t.id}')">
       <div class="task-header">
-        <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
+        <span class="task-label">\${esc(displayLabel)}</span>
         <span class="badge \${badgeClass}">\${esc(latestStatus)}</span>
       </div>
       \${isCyclic || isChat ? '' : '<div class="pipeline">' + pipeline + '</div>'}
@@ -1047,10 +1073,11 @@ function renderTaskCard(t) {
       </div>
       <div class="task-actions">
         \${t.hasTerminal ? '<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>' : ''}
-        \${t.worktreeDir ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>' : ''}
-        \${t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')">Dismiss</button>' : ''}
-        \${t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))">Clean</button>' : ''}
-        \${t.status === 'running' ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal and mark completed.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>' : ''}
+        \${t.worktreeDir && t.status === 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>' : ''}
+        \${!t.hasTerminal || t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')\" title=\"Hide from dashboard (keeps worktree and logs)\">Dismiss</button>' : ''}
+        \${!t.hasTerminal || t.status !== 'running' ? '<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))\" title=\"Remove worktree, branch, and logs permanently\">Clean</button>' : ''}
+        \${!t.hasTerminal && resumable ? '<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\''+t.id+'\\',\\''+resumable.id+'\\',\\''+(t.worktreeDir||'').replace(/\\\\/g,'/')+'\\')">▶ Resume</button>' : ''}
+        \${t.status === 'running' && t.hasTerminal ? '<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal and mark completed.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>' : ''}
       </div>
       \${eventsHtml}
       \${sessionsHtml}
