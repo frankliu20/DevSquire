@@ -14,6 +14,7 @@ export type TaskType = 'dev-issue' | 'watch-pr' | 'review-pr' | 'fix-comments' |
 export interface TaskInfo {
   id: string;
   taskLogId?: string;
+  sessionIds: string[];
   type: TaskType;
   label: string;
   issueUrl?: string;
@@ -22,7 +23,7 @@ export interface TaskInfo {
   worktreeBranch?: string;
   worktreeDir?: string;
   terminal?: vscode.Terminal;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'stopped' | 'completed' | 'failed';
   createdAt: number;
 }
 
@@ -60,7 +61,7 @@ export class TaskRunner {
       for (const task of this.tasks.values()) {
         if (task.terminal === closedTerminal) {
           // If stopTask already marked it completed, just clean up the terminal reference
-          if (task.status === 'completed') {
+          if (task.status === 'stopped') {
             task.terminal = undefined;
             this._onTasksChanged.fire();
             break;
@@ -78,14 +79,14 @@ export class TaskRunner {
             const cwd = task.worktreeDir || this.workspaceRoot;
             this._onSessionEvent.fire({
               type: 'session_ended',
-              repoSlug: this.repoSlug,
+              workspacePath: this.workspaceRoot,
               taskLogId,
               cwd,
               aiPlatform: this.backend.type,
             });
           }
           task.terminal = undefined;
-          task.status = 'completed'; // No longer running — allows re-run without "already running" warning
+          task.status = 'stopped'; // No longer running — allows re-run without "already running" warning
           this._onTasksChanged.fire();
           this.squireDir.log('extension', `Task ${task.id} (${task.label}) terminal closed`);
         }
@@ -150,6 +151,7 @@ export class TaskRunner {
       worktreeBranch: isChat ? undefined : branchName,
       worktreeDir: isChat ? undefined : wt?.path,
       status: 'running',
+      sessionIds: [],
       createdAt: ts,
     };
 
@@ -167,6 +169,7 @@ export class TaskRunner {
       type: 'watch-pr',
       label: 'Watch PRs',
       status: 'running',
+      sessionIds: [],
       createdAt: ts,
     };
 
@@ -228,6 +231,7 @@ export class TaskRunner {
       prNumber,
       isOwnPR: !!config?.isOwn,
       status: 'running',
+      sessionIds: [],
       createdAt: ts,
     };
 
@@ -253,6 +257,7 @@ export class TaskRunner {
       label: `Fix comments PR #${prNumber}`,
       prNumber,
       status: 'running',
+      sessionIds: [],
       createdAt: ts,
     };
 
@@ -281,6 +286,7 @@ export class TaskRunner {
       type: taskType,
       label: isDevIssue ? `[Auto] ${adhocId}` : `${agentName}: ${input.substring(0, 60)}${input.length > 60 ? '…' : ''}`,
       status: 'running',
+      sessionIds: [],
       createdAt: ts,
     };
 
@@ -309,6 +315,7 @@ export class TaskRunner {
       type: isDevIssue ? 'dev-issue' : isWatchPR ? 'watch-pr' : 'run-command',
       label: isDevIssue ? `[Auto] ${adhocId}` : isWatchPR ? 'Watch PRs' : label,
       status: 'running',
+      sessionIds: [],
       createdAt: ts,
     };
 
@@ -355,17 +362,16 @@ export class TaskRunner {
 
     // Bind terminal back to existing task so it shows as running
     const found = this.findTask(taskId);
+    const sessionId = SessionIndexManager.generateSessionId();
     if (found) {
       const task = found[1];
       task.terminal = terminal;
       task.status = 'running';
+      task.sessionIds.push(sessionId);
       this._onTasksChanged.fire();
-
-      // Fire session_created for the resumed session
-      const sessionId = SessionIndexManager.generateSessionId();
       this._onSessionEvent.fire({
         type: 'session_created',
-        repoSlug: this.repoSlug,
+        workspacePath: this.workspaceRoot,
         taskLogId: task.taskLogId || `task-${task.id}`,
         sessionId,
         cwd,
@@ -382,7 +388,7 @@ export class TaskRunner {
       const terminal = task.terminal;
       // Clear reference first so onDidCloseTerminal won't double-process
       task.terminal = undefined;
-      task.status = 'completed';
+      task.status = 'stopped';
       terminal.dispose();
       // Don't mark as completed — the issue isn't done, user just stopped the agent
       if (task.type !== 'watch-pr') {
@@ -396,9 +402,10 @@ export class TaskRunner {
         const cwd = task.worktreeDir || this.workspaceRoot;
         this._onSessionEvent.fire({
           type: 'session_ended',
-          repoSlug: this.repoSlug,
+          workspacePath: this.workspaceRoot,
           taskLogId,
           cwd,
+          aiPlatform: this.backend.type,
         });
       }
       this._onTasksChanged.fire();
@@ -612,12 +619,13 @@ export class TaskRunner {
     }
 
     taskInfo.terminal = terminal;
+    taskInfo.sessionIds.push(sessionId);
     this._onTasksChanged.fire();
 
     // Fire session_created event — SessionIndexManager handles the index write
     this._onSessionEvent.fire({
       type: 'session_created',
-      repoSlug: this.repoSlug,
+      workspacePath: this.workspaceRoot,
       taskLogId: taskInfo.taskLogId || `task-${taskInfo.id}`,
       sessionId,
       cwd,

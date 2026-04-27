@@ -5,11 +5,24 @@ import * as os from 'os';
 import { detectClaudeSession, detectCopilotSession, AiSession } from './session-detector';
 
 /**
+ * A single flat session record — the primary unit in the index.
+ * Each record is self-contained with all metadata needed for grouping/filtering.
+ */
+export interface SessionRecord {
+  id: string;               // dsq-xxx — unique per session run
+  taskLogId: string;         // e.g. "task-issue-39"
+  aiPlatform: string;        // "claude-code" | "copilot-cli" | "copilot-chat"
+  aiSessions: AiSession[];
+  startedAt: string;
+  endedAt: string | null;
+}
+
+/**
  * Events that the SessionIndexManager listens to.
  */
 export interface SessionCreatedEvent {
   type: 'session_created';
-  repoSlug: string;
+  workspacePath: string;
   taskLogId: string;
   sessionId: string;
   cwd: string;
@@ -18,7 +31,7 @@ export interface SessionCreatedEvent {
 
 export interface SessionEndedEvent {
   type: 'session_ended';
-  repoSlug: string;
+  workspacePath: string;
   taskLogId: string;
   cwd: string;
   aiPlatform: 'claude-code' | 'copilot-cli' | 'copilot-chat';
@@ -26,7 +39,7 @@ export interface SessionEndedEvent {
 
 export interface SessionDetectAiEvent {
   type: 'session_detect_ai';
-  repoSlug: string;
+  workspacePath: string;
   taskLogId: string;
   cwd: string;
   aiPlatform: 'claude-code' | 'copilot-cli' | 'copilot-chat';
@@ -59,73 +72,77 @@ export class SessionIndexManager {
   handleEvent(event: SessionEvent): void {
     switch (event.type) {
       case 'session_created':
-        this.createSession(event.repoSlug, event.taskLogId, event.sessionId);
-        this.startAiDetectionPolling(event.repoSlug, event.taskLogId, event.sessionId, event.cwd, event.aiPlatform);
+        this.createSession(event.workspacePath, event.taskLogId, event.sessionId, event.aiPlatform);
+        this.startAiDetectionPolling(event.workspacePath, event.taskLogId, event.sessionId, event.cwd, event.aiPlatform);
         break;
       case 'session_ended': {
         this.stopAiDetectionPolling(event.taskLogId);
-        // Look up the latest sessionId from the index for detection
-        const latestSessionId = this.getLatestSessionId(event.repoSlug, event.taskLogId);
-        this.endSession(event.repoSlug, event.taskLogId, latestSessionId, event.cwd, event.aiPlatform);
+        const latestSessionId = this.getLatestSessionId(event.workspacePath, event.taskLogId);
+        this.endSession(event.workspacePath, event.taskLogId, latestSessionId, event.cwd, event.aiPlatform);
         break;
       }
       case 'session_detect_ai': {
-        const sid = this.getLatestSessionId(event.repoSlug, event.taskLogId);
-        this.detectAndWriteAiSessions(event.repoSlug, event.taskLogId, sid, event.cwd, event.aiPlatform);
+        const sid = this.getLatestSessionId(event.workspacePath, event.taskLogId);
+        this.detectAndWriteAiSessions(event.workspacePath, event.taskLogId, sid, event.cwd, event.aiPlatform);
         break;
       }
     }
   }
 
-  /** Read the index for a specific repo. Used by dashboard-provider. */
-  readRepoSessions(repoSlug: string): Record<string, { sessions: SessionRecord[] }> {
+  /** Read all sessions for a workspace path. Used by dashboard-provider. */
+  readWorkspaceSessions(workspacePath: string): SessionRecord[] {
     const index = this.readIndex();
-    return index[repoSlug] || {};
+    return index[workspacePath] || [];
   }
 
   // --- Private ---
 
-  private createSession(repoSlug: string, taskLogId: string, sessionId: string): void {
+  private createSession(workspacePath: string, taskLogId: string, sessionId: string, aiPlatform: string): void {
     try {
       const index = this.readIndex();
-      if (!index[repoSlug]) index[repoSlug] = {};
-      if (!index[repoSlug][taskLogId]) index[repoSlug][taskLogId] = { sessions: [] };
+      if (!index[workspacePath]) index[workspacePath] = [];
 
       const session: SessionRecord = {
         id: sessionId,
+        taskLogId,
+        aiPlatform,
+        aiSessions: [],
         startedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
         endedAt: null,
-        aiSessions: [],
       };
-      index[repoSlug][taskLogId].sessions.push(session);
+      index[workspacePath].push(session);
       this.writeIndex(index);
     } catch {
       // Non-critical
     }
   }
 
-  private endSession(repoSlug: string, taskLogId: string, sessionId: string | null, cwd: string, aiPlatform: string): void {
+  private endSession(workspacePath: string, taskLogId: string, sessionId: string | null, cwd: string, aiPlatform: string): void {
     try {
       const index = this.readIndex();
-      const taskEntry = index[repoSlug]?.[taskLogId];
-      if (!taskEntry?.sessions?.length) return;
+      const sessions = index[workspacePath];
+      if (!sessions?.length) return;
 
-      const latest = taskEntry.sessions[taskEntry.sessions.length - 1];
+      // Find by sessionId, or last session for this taskLogId
+      const session = sessionId
+        ? sessions.find(s => s.id === sessionId)
+        : [...sessions].reverse().find(s => s.taskLogId === taskLogId);
+      if (!session) return;
+
       let changed = false;
 
       // Detect AI sessions if not already set
-      if (!latest.aiSessions || latest.aiSessions.length === 0) {
-        const matchId = sessionId || latest.id;
+      if (!session.aiSessions || session.aiSessions.length === 0) {
+        const matchId = sessionId || session.id;
         const aiSession = this.detectForPlatform(cwd, matchId, aiPlatform);
         if (aiSession) {
-          latest.aiSessions = [aiSession];
+          session.aiSessions = [aiSession];
           changed = true;
         }
       }
 
-      // Write endedAt
-      if (!latest.endedAt) {
-        latest.endedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+      if (!session.endedAt) {
+        session.endedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
         changed = true;
       }
 
@@ -138,19 +155,22 @@ export class SessionIndexManager {
   }
 
   /** @returns true if AI sessions were found */
-  private detectAndWriteAiSessions(repoSlug: string, taskLogId: string, sessionId: string | null, cwd: string, aiPlatform: string): boolean {
+  private detectAndWriteAiSessions(workspacePath: string, taskLogId: string, sessionId: string | null, cwd: string, aiPlatform: string): boolean {
     try {
       const index = this.readIndex();
-      const taskEntry = index[repoSlug]?.[taskLogId];
-      if (!taskEntry?.sessions?.length) return false;
+      const sessions = index[workspacePath];
+      if (!sessions?.length) return false;
 
-      const latest = taskEntry.sessions[taskEntry.sessions.length - 1];
-      if (latest.aiSessions && latest.aiSessions.length > 0) return true; // Already detected
+      const session = sessionId
+        ? sessions.find(s => s.id === sessionId)
+        : [...sessions].reverse().find(s => s.taskLogId === taskLogId);
+      if (!session) return false;
+      if (session.aiSessions && session.aiSessions.length > 0) return true; // Already detected
 
-      const matchId = sessionId || latest.id;
+      const matchId = sessionId || session.id;
       const aiSession = this.detectForPlatform(cwd, matchId, aiPlatform);
       if (aiSession) {
-        latest.aiSessions = [aiSession];
+        session.aiSessions = [aiSession];
         this.writeIndex(index);
         return true;
       }
@@ -174,27 +194,29 @@ export class SessionIndexManager {
   }
 
   /** Get the latest sessionId for a task from the index */
-  private getLatestSessionId(repoSlug: string, taskLogId: string): string | null {
+  private getLatestSessionId(workspacePath: string, taskLogId: string): string | null {
     try {
       const index = this.readIndex();
-      const sessions = index[repoSlug]?.[taskLogId]?.sessions;
-      if (sessions?.length) return sessions[sessions.length - 1].id;
+      const sessions = index[workspacePath];
+      if (sessions?.length) {
+        for (let i = sessions.length - 1; i >= 0; i--) {
+          if (sessions[i].taskLogId === taskLogId) return sessions[i].id;
+        }
+      }
     } catch { /* ignore */ }
     return null;
   }
 
   /**
    * Poll for AI session files every 10s until detected or max retries reached.
-   * Claude/Copilot session files may take time to appear on disk.
    */
-  private startAiDetectionPolling(repoSlug: string, taskLogId: string, sessionId: string, cwd: string, aiPlatform: string): void {
-    // Stop any existing poller for this task
+  private startAiDetectionPolling(workspacePath: string, taskLogId: string, sessionId: string, cwd: string, aiPlatform: string): void {
     this.stopAiDetectionPolling(taskLogId);
 
     let retries = 0;
     const interval = setInterval(() => {
       retries++;
-      const found = this.detectAndWriteAiSessions(repoSlug, taskLogId, sessionId, cwd, aiPlatform);
+      const found = this.detectAndWriteAiSessions(workspacePath, taskLogId, sessionId, cwd, aiPlatform);
       if (found || retries >= SessionIndexManager.AI_DETECT_MAX_RETRIES) {
         this.stopAiDetectionPolling(taskLogId);
       }
@@ -211,7 +233,7 @@ export class SessionIndexManager {
     }
   }
 
-  private readIndex(): Record<string, Record<string, { sessions: SessionRecord[] }>> {
+  private readIndex(): Record<string, SessionRecord[]> {
     try {
       if (fs.existsSync(SessionIndexManager.INDEX_PATH)) {
         return JSON.parse(fs.readFileSync(SessionIndexManager.INDEX_PATH, 'utf-8'));
@@ -220,7 +242,7 @@ export class SessionIndexManager {
     return {};
   }
 
-  private writeIndex(index: Record<string, Record<string, { sessions: SessionRecord[] }>>): void {
+  private writeIndex(index: Record<string, SessionRecord[]>): void {
     try {
       fs.mkdirSync(SessionIndexManager.INDEX_DIR, { recursive: true });
       fs.writeFileSync(SessionIndexManager.INDEX_PATH, JSON.stringify(index, null, 2));
@@ -228,11 +250,4 @@ export class SessionIndexManager {
       // Non-critical
     }
   }
-}
-
-interface SessionRecord {
-  id: string;
-  startedAt: string;
-  endedAt: string | null;
-  aiSessions: AiSession[];
 }

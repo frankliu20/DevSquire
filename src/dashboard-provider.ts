@@ -10,15 +10,9 @@ import { TaskStateReader, defaultRunningPhase } from './task-state';
 import { SkillsReader } from './skills-reader';
 import { ReportGenerator } from './report';
 import { getDashboardHtml } from './dashboard-html';
-import { SessionIndexManager } from './session-index-manager';
+import { SessionIndexManager, SessionRecord } from './session-index-manager';
 
-/** A single session entry from the global session index */
-export interface SessionEntry {
-  id: string;
-  startedAt?: string;
-  endedAt?: string | null;
-  aiSessions?: Array<{ source: 'claude' | 'copilot'; id: string; resumable: boolean }>;
-}
+export { SessionRecord as SessionEntry } from './session-index-manager';
 
 export class DashboardViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
@@ -296,7 +290,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         ),
       );
       if (logTask) claimedLogIds.add(logTask.id);
-      const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? defaultRunningPhase(rt.type) : 'planned');
+      const phase = logTask?.phase || (rt.status === 'completed' || rt.status === 'stopped' ? 'done' : rt.status === 'running' ? defaultRunningPhase(rt.type) : 'planned');
       const isWaiting = waitingTaskIds.has(rt.id) || waitingTaskIds.has(logTask?.id || '');
       const taskLogId = rt.taskLogId || logTask?.id || '';
       const issueNum = logTask?.issueNumber || (rt.issueUrl ? parseInt(rt.issueUrl.match(/\/issues\/(\d+)/)?.[1] || '0') || undefined : undefined);
@@ -316,7 +310,9 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         hasTerminal: !!rt.terminal,
         startedAt: logTask?.startedAt || new Date(rt.createdAt).toISOString(),
         events: logTask?.events || [],
-        sessions: sessionIndex[taskLogId] || [],
+        sessions: rt.sessionIds.length > 0
+          ? (sessionIndex[taskLogId] || []).filter(s => rt.sessionIds.includes(s.id))
+          : sessionIndex[taskLogId] || [],
         createdAt: rt.createdAt,
         updatedAt: logTask?.updatedAt ? new Date(logTask.updatedAt).getTime() : rt.createdAt,
       };
@@ -354,19 +350,17 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Read the global session index via SessionIndexManager
-   * and return a map of taskLogId → SessionEntry[] for the current repo.
+   * Read flat session records and group by taskLogId for easy lookup.
+   * Runtime tasks with sessionIds will further filter by dsq-xxx ID.
    */
-  private readGlobalSessionIndex(): Record<string, SessionEntry[]> {
+  private readGlobalSessionIndex(): Record<string, SessionRecord[]> {
     try {
-      const repoSlug = `${this.repoInfo.owner}/${this.repoInfo.repo}`;
-      const repoData = this.sessionIndexManager.readRepoSessions(repoSlug);
-      const result: Record<string, SessionEntry[]> = {};
-      for (const [taskLogId, taskEntry] of Object.entries(repoData)) {
-        const sessions = taskEntry?.sessions;
-        if (Array.isArray(sessions) && sessions.length > 0) {
-          result[taskLogId] = sessions;
-        }
+      const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+      const sessions = this.sessionIndexManager.readWorkspaceSessions(workspacePath);
+      const result: Record<string, SessionRecord[]> = {};
+      for (const s of sessions) {
+        if (!result[s.taskLogId]) result[s.taskLogId] = [];
+        result[s.taskLogId].push(s);
       }
       return result;
     } catch {
@@ -380,9 +374,9 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
    */
   private sendHistorySessions(): void {
     try {
-      const repoSlug = `${this.repoInfo.owner}/${this.repoInfo.repo}`;
-      const repoEntry = this.sessionIndexManager.readRepoSessions(repoSlug);
-      if (!Object.keys(repoEntry).length) {
+      const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+      const allSessions = this.sessionIndexManager.readWorkspaceSessions(workspacePath);
+      if (!allSessions.length) {
         this.post('historySessions', []);
         return;
       }
@@ -391,6 +385,17 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       const openIssues = this.ghData.listMyIssues();
       const openIssueNums = new Set(openIssues.map((i: any) => i.number));
 
+      // Group sessions by issue number (extracted from taskLogId)
+      const byIssue = new Map<number, SessionRecord[]>();
+      for (const s of allSessions) {
+        const issueMatch = s.taskLogId.match(/task-issue-(\d+)/);
+        if (!issueMatch) continue;
+        const issueNum = parseInt(issueMatch[1]);
+        if (!openIssueNums.has(issueNum)) continue;
+        if (!byIssue.has(issueNum)) byIssue.set(issueNum, []);
+        byIssue.get(issueNum)!.push(s);
+      }
+
       const results: Array<{
         taskLogId: string;
         issueNumber: number;
@@ -398,20 +403,11 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         sessionCount: number;
         lastSessionTime: string;
         resumableSessionId: string | null;
+        resumableSessionSource: string;
         worktreeDir: string;
       }> = [];
 
-      for (const [taskLogId, taskEntry] of Object.entries(repoEntry)) {
-        // Extract issue number from taskLogId like "task-issue-38"
-        const issueMatch = taskLogId.match(/task-issue-(\d+)/);
-        if (!issueMatch) continue;
-        const issueNum = parseInt(issueMatch[1]);
-        if (!openIssueNums.has(issueNum)) continue;
-
-        const sessions = (taskEntry as any)?.sessions;
-        if (!Array.isArray(sessions) || sessions.length === 0) continue;
-
-        // Find the matching open issue for the label
+      for (const [issueNum, sessions] of byIssue) {
         const issue = openIssues.find((i: any) => i.number === issueNum);
         const label = issue ? `Issue #${issueNum} ${issue.title}` : `Issue #${issueNum}`;
 
@@ -430,7 +426,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
         const lastSession = sessions[sessions.length - 1];
         results.push({
-          taskLogId,
+          taskLogId: `task-issue-${issueNum}`,
           issueNumber: issueNum,
           label,
           sessionCount: sessions.length,
@@ -441,7 +437,6 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         });
       }
 
-      // Sort by last session time, newest first
       results.sort((a, b) => b.lastSessionTime.localeCompare(a.lastSessionTime));
       this.post('historySessions', results);
     } catch {
