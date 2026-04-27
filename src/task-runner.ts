@@ -377,6 +377,7 @@ export class TaskRunner {
       const terminal = task.terminal;
       // Clear reference first so onDidCloseTerminal won't double-process
       task.terminal = undefined;
+      task.status = 'completed';
       terminal.dispose();
       // Don't mark as completed — the issue isn't done, user just stopped the agent
       if (task.type !== 'watch-pr') {

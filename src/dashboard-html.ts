@@ -1101,8 +1101,8 @@ function renderTaskCard(t) {
     var actions = [];
     if (canFocus)    actions.push('<button class="btn btn-pri" onclick="event.stopPropagation();focusTerminal(\\''+t.id+'\\')">Terminal</button>');
     if (canWorktree) actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();openWorktree(\\''+t.id+'\\',\\''+t.worktreeDir.replace(/\\\\/g,'/')+'\\')">Worktree</button>');
-    if (canDismiss)  actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')\" title=\"Hide from dashboard (keeps worktree and logs)\">Dismiss</button>');
-    if (canClean)    actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))\" title=\"Remove worktree, branch, and logs permanently\">Clean</button>');
+    if (canDismiss)  actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();dismissTask(\\''+t.id+'\\')" title="Hide from dashboard (keeps worktree and logs)">Dismiss</button>');
+    if (canClean)    actions.push('<button class="btn-s btn-sec" onclick="event.stopPropagation();confirmAction(\\'Clean up?\\',\\'Remove worktree and logs.\\',()=>cleanupTask(\\''+t.id+'\\'))" title="Remove worktree, branch, and logs permanently">Clean</button>');
     if (canResume)   actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();resumeSession(\\''+t.id+'\\',\\''+resumable.id+'\\',\\''+(t.worktreeDir||'').replace(/\\\\/g,'/')+'\\')">▶ Resume</button>');
     if (canRerun)    actions.push('<button class="btn btn-pri" style="margin-left:auto" onclick="event.stopPropagation();rerunIssue(\\''+esc(t.issueUrl)+'\\',\\''+esc(t.label || '')+'\\')">▶ Re-run</button>');
     if (canStop)     actions.push('<button class="btn-s btn-danger" style="margin-left:auto" onclick="event.stopPropagation();confirmAction(\\'Stop task?\\',\\'Close the terminal.\\',()=>stopTask(\\''+t.id+'\\'))">Stop</button>');
