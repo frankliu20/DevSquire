@@ -10,6 +10,17 @@ import { SquireBackend } from './backend';
 export class FrameworkSync {
   private readonly bundledDir: string;
 
+  /**
+   * Agent names that should be synced as commands (not agents) for backends
+   * that support a separate commands directory (e.g., Claude Code).
+   * Keep in sync with ClaudeCodeBackend.COMMAND_AGENTS.
+   */
+  private static readonly COMMAND_NAMES = new Set([
+    'squire-dev-issue',
+    'squire-watch-pr',
+    'squire-pr-reviewer',
+  ]);
+
   constructor(
     private context: vscode.ExtensionContext,
     private backend: SquireBackend,
@@ -38,17 +49,14 @@ export class FrameworkSync {
     let synced = 0;
 
     if (targetDirs.commands) {
-      // Backend has separate commands dir — split files by COMMAND_AGENTS list
-      const commandNames = new Set(['squire-dev-issue', 'squire-watch-pr', 'squire-pr-reviewer']);
+      const commandNames = FrameworkSync.COMMAND_NAMES;
 
       if (hasBackendCommands) {
         // Prefer backend-specific command files, fall back to generic agents
         synced += this.syncDir(commandsSrcDir, targetDirs.commands);
         // Also sync any command agents that don't have a backend-specific version
         const backendCommandFiles = new Set(
-          fs.existsSync(commandsSrcDir)
-            ? fs.readdirSync(commandsSrcDir).filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', ''))
-            : [],
+          fs.readdirSync(commandsSrcDir).filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', '')),
         );
         synced += this.syncDir(agentsSrcDir, targetDirs.commands, (f) =>
           commandNames.has(f.replace('.md', '')) && !backendCommandFiles.has(f.replace('.md', '')),

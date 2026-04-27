@@ -177,7 +177,7 @@ mkdir -p "$REPO_ROOT/.squire/pending-decisions"
 
 ### For CI failure:
 ```bash
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
+cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << NOTIFICATION
 {
   "taskId": "$TASK_LOG_ID",
   "issueNumber": null,
@@ -193,7 +193,7 @@ NOTIFICATION
 
 ### For unresolved comments:
 ```bash
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
+cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << NOTIFICATION
 {
   "taskId": "$TASK_LOG_ID",
   "issueNumber": null,
@@ -209,7 +209,7 @@ NOTIFICATION
 
 ### For ready to merge:
 ```bash
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'NOTIFICATION'
+cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << NOTIFICATION
 {
   "taskId": "$TASK_LOG_ID",
   "issueNumber": null,

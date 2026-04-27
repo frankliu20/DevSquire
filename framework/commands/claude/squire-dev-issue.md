@@ -93,15 +93,15 @@ Replace all `...` with actual values. **Do not skip any of these logs.**
 1. **Write a decision request file** to `$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json`:
 ```bash
 mkdir -p "$REPO_ROOT/.squire/pending-decisions"
-cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << 'DECISION'
+cat > "$REPO_ROOT/.squire/pending-decisions/$TASK_LOG_ID.json" << DECISION
 {
-  "id": "$TASK_LOG_ID-<timestamp>",
+  "id": "$TASK_LOG_ID-$(date +%s)",
   "taskId": "$TASK_LOG_ID",
   "type": "decision",
   "title": "<short title>",
   "message": "<what you need from the user>",
   "options": ["option1", "option2"],
-  "createdAt": "<ISO8601>"
+  "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 DECISION
 ```
