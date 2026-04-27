@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { WorktreeManager } from './worktree';
 import { GitHubRepoInfo } from './github-detector';
 import { SquireDir } from './squire-dir';
@@ -65,6 +66,8 @@ export class TaskRunner {
               task_id: taskLogId,
               type: task.type,
             });
+            // Write endedAt to global session index
+            this.updateSessionEndedAt(taskLogId);
           }
           task.terminal = undefined;
           this._onTasksChanged.fire();
@@ -531,5 +534,28 @@ export class TaskRunner {
     const refMatch = input.match(/#?(\d+)$/);
     if (refMatch) return refMatch[1];
     return null;
+  }
+
+  /**
+   * Write endedAt timestamp to the global session index (~/.squire/sessions/index.json).
+   * Finds the latest session for this taskLogId under the current repo slug and stamps it.
+   */
+  private updateSessionEndedAt(taskLogId: string): void {
+    const indexPath = path.join(os.homedir(), '.squire', 'sessions', 'index.json');
+    try {
+      if (!fs.existsSync(indexPath)) return;
+      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+      const repoSlug = this.repoSlug;
+      const taskEntry = index[repoSlug]?.[taskLogId];
+      if (!taskEntry?.sessions?.length) return;
+
+      const latest = taskEntry.sessions[taskEntry.sessions.length - 1];
+      if (!latest.endedAt) {
+        latest.endedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+      }
+    } catch {
+      // Non-critical — don't block terminal close
+    }
   }
 }
