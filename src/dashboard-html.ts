@@ -1041,7 +1041,6 @@ function renderTaskCard(t) {
     // When inside a group, show "Session <id> [Claude/Copilot]" instead of the full label
     var displayLabel = t.label || 'Task ' + t.id;
     if (t._inGroup) {
-      var sessions = t.sessions || [];
       var aiSource = '';
       for (var si = 0; si < sessions.length; si++) {
         var ais = sessions[si].aiSessions;
@@ -1053,9 +1052,8 @@ function renderTaskCard(t) {
 
     // Find resumable session for showing Resume button on task card
     var resumable = null;
-    var taskSessions = t.sessions || [];
-    for (var ri = taskSessions.length - 1; ri >= 0; ri--) {
-      var rais = taskSessions[ri].aiSessions;
+    for (var ri = sessions.length - 1; ri >= 0; ri--) {
+      var rais = sessions[ri].aiSessions;
       if (rais) { for (var rai = 0; rai < rais.length; rai++) { if (rais[rai].resumable) { resumable = rais[rai]; break; } } }
       if (resumable) break;
     }
