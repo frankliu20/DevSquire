@@ -139,10 +139,10 @@ export function detectCopilotSession(sessionId: string): AiSession | null {
             const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
             const sessionId = parseCopilotWorkspaceYaml(yamlContent);
             if (sessionId) {
-              return { source: 'copilot', id: sessionId, resumable: false };
+              return { source: 'copilot', id: sessionId, resumable: true };
             }
           }
-          return { source: 'copilot', id: dir, resumable: false };
+          return { source: 'copilot', id: dir, resumable: true };
         }
       } catch {
         continue;
