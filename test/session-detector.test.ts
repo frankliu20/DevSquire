@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   contentMatchesTaskLogId,
   parseCopilotWorkspaceYaml,
+  parseClaudeLastPrompt,
 } from '../src/session-detector';
 
 // --- Tests ---
@@ -25,6 +26,22 @@ describe('Session Detector', () => {
 
     it('returns false for empty content', () => {
       expect(contentMatchesTaskLogId('', 'task-issue-42')).toBe(false);
+    });
+  });
+
+  describe('parseClaudeLastPrompt', () => {
+    it('extracts lastPrompt and sessionId from last-prompt line', () => {
+      const tail = '{"type":"assistant","message":"done"}\n{"type":"last-prompt","lastPrompt":"/squire-dev-issue --auto https://github.com/org/repo/issues/42 [task-log-id:task-issue-42]","sessionId":"bb21d985-1234"}\n';
+      const result = parseClaudeLastPrompt(tail);
+      expect(result).toEqual({ lastPrompt: '/squire-dev-issue --auto https://github.com/org/repo/issues/42 [task-log-id:task-issue-42]', sessionId: 'bb21d985-1234' });
+    });
+
+    it('returns null when no last-prompt line', () => {
+      expect(parseClaudeLastPrompt('{"type":"assistant"}\n{"type":"done"}\n')).toBeNull();
+    });
+
+    it('returns null for empty string', () => {
+      expect(parseClaudeLastPrompt('')).toBeNull();
     });
   });
 
