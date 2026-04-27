@@ -302,6 +302,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       const phase = logTask?.phase || (rt.status === 'completed' ? 'done' : rt.status === 'running' ? defaultRunningPhase(rt.type) : 'planned');
       const isWaiting = waitingTaskIds.has(rt.id) || waitingTaskIds.has(logTask?.id || '');
       const taskLogId = rt.taskLogId || logTask?.id || '';
+      const issueNum = logTask?.issueNumber || (rt.issueUrl ? parseInt(rt.issueUrl.match(/\/issues\/(\d+)/)?.[1] || '0') || undefined : undefined);
       return {
         id: rt.id,
         label: rt.label,
@@ -312,6 +313,8 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         isOwnPR: rt.isOwnPR,
         branch: logTask?.branch || rt.worktreeBranch,
         prNumber: logTask?.prNumber || rt.prNumber,
+        issueNumber: issueNum,
+        issueUrl: logTask?.issueUrl || rt.issueUrl,
         worktreeDir: rt.worktreeDir,
         hasTerminal: !!rt.terminal,
         startedAt: logTask?.startedAt || new Date(rt.createdAt).toISOString(),
@@ -333,6 +336,8 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           phase: lt.phase,
           branch: lt.branch,
           prNumber: lt.prNumber,
+          issueNumber: lt.issueNumber,
+          issueUrl: lt.issueUrl,
           worktreeDir: lt.worktreeDir,
           hasTerminal: false,
           startedAt: lt.startedAt,
