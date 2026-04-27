@@ -15,7 +15,7 @@ You are a code review agentic engineer of DevSquire. The user gives you a PR URL
 Parse `[task-log-id:<ID>]` from the prompt if present. Strip it from the input before processing.
 
 Use this ID for **ALL** logging:
-- JSONL file: `.squire/logs/<ID>.jsonl`
+- JSONL file: `$REPO_ROOT/.squire/logs/<ID>.jsonl`
 - `task_id` field in all log entries: `<ID>`
 
 If `[task-log-id:...]` is not provided, derive: `task-review-<N>` from the PR number.
@@ -25,7 +25,10 @@ If `[task-log-id:...]` is not provided, derive: `task-review-<N>` from the PR nu
 GitHub only. Use `gh` CLI for all PR operations. Extract repo from the PR URL.
 ```bash
 REPO_SLUG=$(git remote get-url origin | sed -E 's|.*github\.com[:/]||; s|\.git$||')
+REPO_ROOT=$(git rev-parse --show-toplevel)
 ```
+
+**CRITICAL: All log paths MUST use `$REPO_ROOT/.squire/`** — not relative `.squire/`. After `cd` into a worktree, relative paths resolve inside the worktree, making logs invisible to the Dashboard.
 
 ## Review Configuration
 
@@ -166,7 +169,7 @@ For each unresolved comment:
 
 **After presenting the review summary, log completion:**
 ```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Follow the strategy-specific behavior defined above. For `normal`, wait for user input. For `auto` and `quick-approve`, proceed immediately.
@@ -269,12 +272,12 @@ The extension writes `reviewing` on task start. You handle the rest:
 
 **After presenting the review summary** (all strategies, including own-PR):
 ```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_done\",\"phase\":\"done\",\"pr_number\":$PR_NUMBER}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 **After publishing a review to GitHub** (auto/quick-approve strategy, NOT own-PR):
 ```bash
-echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_published\",\"phase\":\"published\",\"pr_number\":$PR_NUMBER}" >> ".squire/logs/$TASK_LOG_ID.jsonl"
+echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"task_id\":\"$TASK_LOG_ID\",\"type\":\"review_published\",\"phase\":\"published\",\"pr_number\":$PR_NUMBER}" >> "$REPO_ROOT/.squire/logs/$TASK_LOG_ID.jsonl"
 ```
 
 Replace `$TASK_LOG_ID` and `$PR_NUMBER` with actual values.
