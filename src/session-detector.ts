@@ -38,7 +38,7 @@ export function parseCopilotWorkspaceYaml(content: string): string | null {
  */
 export function detectClaudeSession(cwd: string, taskLogId: string): AiSession | null {
   try {
-    const encodedCwd = cwd.replace(/[:\\/\.]/g, '-');
+    const encodedCwd = cwd.replace(/[:\.\\/]/g, '-');
     const projectDir = path.join(os.homedir(), '.claude', 'projects', encodedCwd);
     if (!fs.existsSync(projectDir)) return null;
 
