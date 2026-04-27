@@ -29,17 +29,40 @@ export class FrameworkSync {
     }
 
     const targetDirs = this.backend.getAgentSyncDirs(location, workspaceRoot || '');
-    const srcDir = path.join(this.bundledDir, 'agents');
+    const agentsSrcDir = path.join(this.bundledDir, 'agents');
+
+    // Backend-specific commands directory (e.g., framework/commands/claude/)
+    const commandsSrcDir = path.join(this.bundledDir, 'commands', this.backend.type);
+    const hasBackendCommands = fs.existsSync(commandsSrcDir);
+
     let synced = 0;
 
     if (targetDirs.commands) {
       // Backend has separate commands dir — split files by COMMAND_AGENTS list
       const commandNames = new Set(['squire-dev-issue', 'squire-watch-pr', 'squire-pr-reviewer']);
-      synced += this.syncDir(srcDir, targetDirs.commands, (f) => commandNames.has(f.replace('.md', '')));
-      synced += this.syncDir(srcDir, targetDirs.agents, (f) => !commandNames.has(f.replace('.md', '')));
+
+      if (hasBackendCommands) {
+        // Prefer backend-specific command files, fall back to generic agents
+        synced += this.syncDir(commandsSrcDir, targetDirs.commands);
+        // Also sync any command agents that don't have a backend-specific version
+        const backendCommandFiles = new Set(
+          fs.existsSync(commandsSrcDir)
+            ? fs.readdirSync(commandsSrcDir).filter((f) => f.endsWith('.md')).map((f) => f.replace('.md', ''))
+            : [],
+        );
+        synced += this.syncDir(agentsSrcDir, targetDirs.commands, (f) =>
+          commandNames.has(f.replace('.md', '')) && !backendCommandFiles.has(f.replace('.md', '')),
+        );
+      } else {
+        // No backend-specific commands — use generic agent files as commands
+        synced += this.syncDir(agentsSrcDir, targetDirs.commands, (f) => commandNames.has(f.replace('.md', '')));
+      }
+
+      // Non-command agents always come from framework/agents/
+      synced += this.syncDir(agentsSrcDir, targetDirs.agents, (f) => !commandNames.has(f.replace('.md', '')));
     } else {
-      // All go to agents dir
-      synced += this.syncDir(srcDir, targetDirs.agents);
+      // All go to agents dir (e.g., Copilot backend)
+      synced += this.syncDir(agentsSrcDir, targetDirs.agents);
     }
 
     if (showNotification) {
