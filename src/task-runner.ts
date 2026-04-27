@@ -22,7 +22,7 @@ export interface TaskInfo {
   worktreeBranch?: string;
   worktreeDir?: string;
   terminal?: vscode.Terminal;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'orphan';
+  status: 'pending' | 'running' | 'completed' | 'failed';
   createdAt: number;
 }
 
@@ -325,18 +325,44 @@ export class TaskRunner {
     return undefined;
   }
 
-  killTask(taskId: string): void {
+  /** Stop a running task: close terminal, mark completed */
+  stopTask(taskId: string): void {
     const found = this.findTask(taskId);
     if (found?.[1]?.terminal) {
       const task = found[1];
-      task.terminal.sendText('\x03', false); // Ctrl+C
-      task.status = 'failed';
+      task.terminal.dispose();
+      task.status = 'completed';
+      // Write completion event to JSONL + update session index
+      if (task.type !== 'watch-pr') {
+        const taskLogId = task.taskLogId || `task-${task.id}`;
+        this.squireDir.logJson(taskLogId, {
+          event: 'task_completed',
+          phase: 'done',
+          task_id: taskLogId,
+          type: task.type,
+        });
+        const cwd = task.worktreeDir || this.workspaceRoot;
+        this.updateSessionIndex(taskLogId, cwd, true);
+      }
+      task.terminal = undefined;
       this._onTasksChanged.fire();
-      this.squireDir.log('extension', `Task ${taskId} killed by user`);
+      this.squireDir.log('extension', `Task ${taskId} stopped by user`);
     }
   }
 
-  cleanupTask(taskId: string): void {
+  /** Dismiss a completed/failed task: hide from dashboard, preserve all disk data */
+  dismissTask(taskId: string): void {
+    const found = this.findTask(taskId);
+    if (found) {
+      const [runtimeId] = found;
+      this.tasks.delete(runtimeId);
+    }
+    this._onTasksChanged.fire();
+    this.squireDir.log('extension', `Task ${taskId} dismissed`);
+  }
+
+  /** Clean a task: delete worktree + log + decisions, preserve global session index */
+  cleanTask(taskId: string): void {
     const found = this.findTask(taskId);
     if (found) {
       const [runtimeId, task] = found;
@@ -346,56 +372,59 @@ export class TaskRunner {
       }
       this.tasks.delete(runtimeId);
     }
-    // Also clean JSONL log if taskId is a taskLogId
-    if (taskId.startsWith('task-')) {
-      const logFile = path.join(this.squireDir.logsDir, `${taskId}.jsonl`);
+
+    // Delete JSONL log file
+    const logId = taskId.startsWith('task-') ? taskId : undefined;
+    if (logId) {
+      const logFile = path.join(this.squireDir.logsDir, `${logId}.jsonl`);
       try { if (fs.existsSync(logFile)) fs.unlinkSync(logFile); } catch { /* non-critical */ }
     }
-    this._onTasksChanged.fire();
-    this.squireDir.log('extension', `Task ${taskId} cleaned up`);
-  }
-
-  /** Clean an orphan task: remove its JSONL log, pending decisions, and optionally its worktree */
-  cleanOrphanTask(taskId: string): void {
-    // Delete JSONL log file
-    const logFile = path.join(this.squireDir.logsDir, `${taskId}.jsonl`);
-    try {
-      if (fs.existsSync(logFile)) {
-        fs.unlinkSync(logFile);
-      }
-    } catch { /* non-critical */ }
 
     // Delete any pending decision for this task
     const decisionFile = path.join(this.squireDir.decisionsDir, `${taskId}.json`);
-    try {
-      if (fs.existsSync(decisionFile)) {
-        fs.unlinkSync(decisionFile);
-      }
-    } catch { /* non-critical */ }
+    try { if (fs.existsSync(decisionFile)) fs.unlinkSync(decisionFile); } catch { /* non-critical */ }
 
-    // Try to remove worktree if it exists — extract branch from taskId
-    const issueMatch = taskId.match(/issue-(\d+)/);
-    if (issueMatch) {
-      const branchPatterns = [`dev/issue-${issueMatch[1]}`, `fix/issue-${issueMatch[1]}`, `feat/issue-${issueMatch[1]}`];
-      for (const branch of branchPatterns) {
-        try {
-          this.worktree.remove(this.workspaceRoot, branch);
-        } catch { /* ignore — branch may not exist */ }
+    // If no runtime task was found, try to remove worktree by branch pattern (log-only tasks)
+    if (!found) {
+      const issueMatch = taskId.match(/issue-(\d+)/);
+      if (issueMatch) {
+        const branchPatterns = [`dev/issue-${issueMatch[1]}`, `fix/issue-${issueMatch[1]}`, `feat/issue-${issueMatch[1]}`];
+        for (const branch of branchPatterns) {
+          try { this.worktree.remove(this.workspaceRoot, branch); } catch { /* ignore */ }
+        }
       }
     }
 
     this._onTasksChanged.fire();
-    this.squireDir.log('extension', `Orphan task ${taskId} cleaned up`);
+    this.squireDir.log('extension', `Task ${taskId} cleaned`);
   }
 
+  /** Clean all non-running tasks. Preserves global session index. */
   cleanAll(): void {
+    // Collect non-running task IDs first (avoid mutating while iterating)
+    const toClean: string[] = [];
     for (const [id, task] of this.tasks) {
       if (task.status !== 'running') {
-        if (task.terminal) task.terminal.dispose();
-        this.tasks.delete(id);
+        toClean.push(task.taskLogId || id);
       }
     }
-    // Remove all git worktrees under .squire/worktrees/ properly
+    for (const taskId of toClean) {
+      this.cleanTask(taskId);
+    }
+
+    // Also clean log-only tasks (not in runtime Map) by scanning logs dir
+    try {
+      const logFiles = fs.readdirSync(this.squireDir.logsDir).filter(f => f.endsWith('.jsonl') && f !== 'tasks.jsonl');
+      for (const file of logFiles) {
+        const logId = file.replace('.jsonl', '');
+        // Skip if this task is still running in the Map
+        const found = this.findTask(logId);
+        if (found && found[1].status === 'running') continue;
+        this.cleanTask(logId);
+      }
+    } catch { /* non-critical */ }
+
+    // Remove any remaining worktrees under .squire/worktrees/ (catch stragglers)
     const worktrees = this.worktree.list(this.workspaceRoot);
     const squireWorktreePrefix = path.join(this.workspaceRoot, '.squire', 'worktrees').replace(/\\/g, '/');
     for (const wt of worktrees) {
@@ -404,11 +433,9 @@ export class TaskRunner {
         this.worktree.remove(this.workspaceRoot, wt.branch, true);
       }
     }
-    this.squireDir.log('extension', 'Clean all: removed logs, pending-decisions, worktrees');
-    this.squireDir.cleanDirs();
+
     this._onTasksChanged.fire();
-    // Sync back to main after cleanup
-    this.syncMain();
+    this.squireDir.log('extension', 'Clean all: removed tasks, logs, decisions, worktrees (preserved session index)');
     vscode.window.showInformationMessage('DevSquire: Clean all done.');
   }
 
