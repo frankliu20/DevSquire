@@ -30,11 +30,25 @@ export function parseCopilotWorkspaceYaml(content: string): string | null {
 }
 
 /**
+ * Read the tail of a file (last N bytes) to avoid reading huge JSONL files.
+ */
+function readTail(filePath: string, bytes: number = 4096): string {
+  const stat = fs.statSync(filePath);
+  if (stat.size <= bytes) return fs.readFileSync(filePath, 'utf-8');
+  const fd = fs.openSync(filePath, 'r');
+  const buf = Buffer.alloc(bytes);
+  fs.readSync(fd, buf, 0, bytes, stat.size - bytes);
+  fs.closeSync(fd);
+  return buf.toString('utf-8');
+}
+
+/**
  * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/*.jsonl
- * for session files whose content contains the taskLogId.
+ * for session files whose last-prompt entry contains the taskLogId.
  *
- * Claude encodes the cwd into a directory name by replacing : \ / . with -
+ * Claude encodes the cwd into a directory name by replacing : . \ / with -
  * The JSONL filename (minus .jsonl) is the Claude session ID.
+ * The last-prompt line near the end of the file is used for fast matching.
  */
 export function detectClaudeSession(cwd: string, taskLogId: string): AiSession | null {
   try {
@@ -45,14 +59,15 @@ export function detectClaudeSession(cwd: string, taskLogId: string): AiSession |
     const jsonlFiles = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
     if (jsonlFiles.length === 0) return null;
 
-    // Sort by mtime descending — check most recent first for efficiency
+    // Sort by mtime descending — check most recent first
     const sorted = jsonlFiles
       .map(f => ({ name: f, mtime: fs.statSync(path.join(projectDir, f)).mtimeMs }))
       .sort((a, b) => b.mtime - a.mtime);
 
     for (const file of sorted) {
-      const content = fs.readFileSync(path.join(projectDir, file.name), 'utf-8');
-      if (contentMatchesTaskLogId(content, taskLogId)) {
+      const tail = readTail(path.join(projectDir, file.name));
+      // Fast path: look for last-prompt line containing taskLogId
+      if (contentMatchesTaskLogId(tail, taskLogId)) {
         const sessionId = file.name.replace('.jsonl', '');
         return { source: 'claude', id: sessionId, resumable: true };
       }
