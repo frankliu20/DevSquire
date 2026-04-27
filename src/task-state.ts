@@ -48,6 +48,7 @@ export interface TaskState {
   startedAt: string;
   updatedAt: string;
   events: TaskEvent[];
+  currentSessionId?: string;
 }
 
 export interface TaskEvent {
@@ -55,6 +56,7 @@ export interface TaskEvent {
   phase?: string;
   message?: string;
   type?: string;
+  dsqSession?: string;
 }
 
 /** Pending decision from the AI */
@@ -144,8 +146,8 @@ export class TaskStateReader {
     return tasks.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
 
-  /** Read a single task state */
-  readTask(taskId: string): TaskState | null {
+  /** Read a single task state, optionally filtering events by session ID */
+  readTask(taskId: string, sessionId?: string): TaskState | null {
     const logFile = path.join(this.squireDir, 'logs', `${taskId}.jsonl`);
     if (!fs.existsSync(logFile)) return null;
 
@@ -187,11 +189,21 @@ export class TaskStateReader {
             phase: entry.phase,
             message: entry.message || entry.event,
             type: entry.type || entry.event,
+            dsqSession: entry.dsq_session,
           });
         } catch {
           // Skip malformed lines
         }
       }
+
+      // Determine currentSessionId from the last event's dsq_session
+      const lastSessionEvent = [...events].reverse().find((e) => e.dsqSession);
+      const currentSessionId = lastSessionEvent?.dsqSession;
+
+      // Optionally filter events by session ID
+      const filteredEvents = sessionId
+        ? events.filter((e) => e.dsqSession === sessionId)
+        : events;
 
       return {
         id: taskId,
@@ -204,7 +216,8 @@ export class TaskStateReader {
         worktreeDir,
         startedAt,
         updatedAt,
-        events,
+        events: filteredEvents,
+        currentSessionId,
       };
     } catch {
       return null;
