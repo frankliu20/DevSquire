@@ -285,6 +285,30 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
   position: relative; background: var(--bg-surface);
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
+/* Task grouping */
+.task-section-header {
+  font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--fg-muted); padding: var(--sp-2) 0 var(--sp-1); margin-top: var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: var(--sp-2);
+}
+.task-section-header:first-child { margin-top: 0; }
+.task-section-header .section-icon { font-size: var(--text-sm); }
+.task-group { margin-bottom: var(--sp-1); }
+.task-group summary {
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2);
+  cursor: pointer; border-radius: var(--r-sm); font-size: var(--text-sm); list-style: none;
+  transition: background var(--t-fast);
+}
+.task-group summary::-webkit-details-marker { display: none; }
+.task-group summary::before {
+  content: '▶'; font-size: 9px; color: var(--fg-muted); transition: transform var(--t-fast);
+  display: inline-block; width: 12px; flex-shrink: 0;
+}
+.task-group[open] summary::before { transform: rotate(90deg); }
+.task-group summary:hover { background: var(--bg-surface); }
+.task-group-title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-group-meta { font-size: var(--text-xs); color: var(--fg-muted); white-space: nowrap; }
+.task-group-cards { padding-left: var(--sp-3); }
 .task-card:hover { box-shadow: var(--shadow-sm); }
 .task-card.running { border-left: 3px solid var(--yellow); }
 .task-card.done { border-left: 3px solid var(--green); }
@@ -604,6 +628,7 @@ function cisBadge(status) {
 let issues = [], prs = { mine: [], review: [] }, tasks = [], decisions = [], skills = [], accounts = [];
 let currentTab = 'issues', prFilter = 'mine', reportView = 'eod', skillFilter = 'all';
 let expandedIssue = null, expandedTask = null, expandedSkill = null, expandedPR = null, expandedSessions = null;
+let expandedGroups = {}; // track collapsed groups
 let confirmCallback = null;
 let issuesLoaded = false, prsLoaded = false;
 let myPRSubFilter = 'all'; // 'all' | 'ready'
@@ -855,7 +880,81 @@ const CYCLIC_TYPES = { 'watch-pr': true };
 function renderTasks(list) {
   const c = document.getElementById('taskList');
   if (!list.length) { c.innerHTML = '<div class="empty" data-icon="⚙️">No active tasks</div>'; return; }
-  c.innerHTML = list.map(t => {
+
+  // Categorize tasks into Issues, PRs, Other
+  const PR_TYPES = { 'review-pr': 1, 'watch-pr': 1, 'fix-comments': 1 };
+  const issueGroups = {};  // issueNumber → { tasks, label }
+  const prGroups = {};     // prNumber → { tasks, label }
+  const otherTasks = [];
+
+  list.forEach(t => {
+    const issueNum = t.issueNumber || (t.label && t.label.match(/#(\d+)/) ? parseInt(t.label.match(/#(\d+)/)[1]) : null);
+    if (PR_TYPES[t.type] && t.prNumber) {
+      if (!prGroups[t.prNumber]) prGroups[t.prNumber] = { tasks: [], label: t.label || 'PR #' + t.prNumber };
+      prGroups[t.prNumber].tasks.push(t);
+    } else if (issueNum) {
+      if (!issueGroups[issueNum]) issueGroups[issueNum] = { tasks: [], label: t.label || 'Issue #' + issueNum };
+      issueGroups[issueNum].tasks.push(t);
+    } else {
+      otherTasks.push(t);
+    }
+  });
+
+  // Sort groups: running first, then by latest updatedAt
+  function sortGroups(groups) {
+    return Object.entries(groups).sort((a, b) => {
+      const aRunning = a[1].tasks.some(t => t.status === 'running') ? 1 : 0;
+      const bRunning = b[1].tasks.some(t => t.status === 'running') ? 1 : 0;
+      if (bRunning !== aRunning) return bRunning - aRunning;
+      const aTime = Math.max(...a[1].tasks.map(t => t.updatedAt || 0));
+      const bTime = Math.max(...b[1].tasks.map(t => t.updatedAt || 0));
+      return bTime - aTime;
+    });
+  }
+
+  function groupStatusBadge(tasks) {
+    if (tasks.some(t => t.status === 'running')) return '<span class="badge badge-yellow">running</span>';
+    if (tasks.some(t => t.status === 'failed' || t.phase === 'failed')) return '<span class="badge badge-red">failed</span>';
+    if (tasks.every(t => t.phase === 'done' || t.status === 'completed')) return '<span class="badge badge-green">done</span>';
+    return '<span class="badge badge-neutral">' + tasks.length + ' task' + (tasks.length > 1 ? 's' : '') + '</span>';
+  }
+
+  function renderGroup(key, group, prefix) {
+    const gid = prefix + '-' + key;
+    const isOpen = expandedGroups[gid] !== false; // open by default
+    return '<details class="task-group" ' + (isOpen ? 'open' : '') + ' ontoggle="onGroupToggle(this,\'' + gid + '\')">'
+      + '<summary>'
+      + '<span class="task-group-title">' + esc(group.label) + '</span>'
+      + '<span class="task-group-meta">' + group.tasks.length + ' task' + (group.tasks.length > 1 ? 's' : '') + '</span>'
+      + groupStatusBadge(group.tasks)
+      + '</summary>'
+      + '<div class="task-group-cards">' + group.tasks.map(renderTaskCard).join('') + '</div>'
+      + '</details>';
+  }
+
+  let html = '';
+  const sortedIssues = sortGroups(issueGroups);
+  const sortedPRs = sortGroups(prGroups);
+
+  if (sortedIssues.length) {
+    html += '<div class="task-section-header"><span class="section-icon">📋</span> Issues</div>';
+    html += sortedIssues.map(([k, g]) => renderGroup(k, g, 'issue')).join('');
+  }
+  if (sortedPRs.length) {
+    html += '<div class="task-section-header"><span class="section-icon">🔀</span> Pull Requests</div>';
+    html += sortedPRs.map(([k, g]) => renderGroup(k, g, 'pr')).join('');
+  }
+  if (otherTasks.length) {
+    if (sortedIssues.length || sortedPRs.length) {
+      html += '<div class="task-section-header"><span class="section-icon">📦</span> Other</div>';
+    }
+    html += otherTasks.map(renderTaskCard).join('');
+  }
+
+  c.innerHTML = html;
+}
+function onGroupToggle(el, gid) { expandedGroups[gid] = el.open; }
+function renderTaskCard(t) {
     var phases = PHASE_PIPELINES[t.type] || PHASE_PIPELINES['dev-issue'];
     // Own PR reviews don't need 'published' step
     if (t.type === 'review-pr' && t.isOwnPR) phases = ['reviewing', 'reviewed', 'done'];
@@ -872,7 +971,6 @@ function renderTasks(list) {
     const pipeline = displayPhases.map((p, i) => {
       var cls = '';
       if (isCyclic) {
-        // Cyclic: only highlight the current step, don't mark previous as done
         if (isFailed && i === phaseIdx) cls = 'failed';
         else if (i === phaseIdx && t.status === 'running') cls = 'active';
       } else {
@@ -883,12 +981,10 @@ function renderTasks(list) {
       return '<div class="pipeline-step ' + cls + '"><div class="pipeline-bar"></div><div class="pipeline-label">' + (PHASE_LABELS[p] || p) + '</div></div>';
     }).join('');
 
-    // Latest status: use last event detail, or phase label, never raw numbers
     var latestStatus = PHASE_LABELS[displayPhase] || rawPhase;
     if (t.events && t.events.length) {
       var lastEvt = t.events[t.events.length - 1];
       var msg = lastEvt.phase || lastEvt.type || '';
-      // Prefer human-readable phase label
       if (PHASE_LABELS[msg]) msg = PHASE_LABELS[msg];
       else if (PHASE_MAP[msg]) msg = PHASE_LABELS[PHASE_MAP[msg]] || msg;
       if (msg && typeof msg === 'string' && msg.length > 1) latestStatus = msg;
@@ -902,10 +998,8 @@ function renderTasks(list) {
         ).join('') + '</div>'
       : '';
 
-    // Session history section
     const sessions = t.sessions || [];
     const sessionCount = sessions.length;
-    const sessionToggleId = 'sess-' + t.id;
     const sessionsHtml = sessionCount > 0
       ? '<div class="session-toggle" onclick="event.stopPropagation();toggleSessions(\'' + t.id + '\')">'
         + '<span class="chevron ' + (expandedSessions === t.id ? 'open' : '') + '">&#9654;</span>'
@@ -961,7 +1055,6 @@ function renderTasks(list) {
       \${eventsHtml}
       \${sessionsHtml}
     </div>\`;
-  }).join('');
 }
 function toggleTaskEvents(id) { expandedTask = expandedTask === id ? null : id; renderTasks(tasks); }
 function stopTask(id) { vscode.postMessage({ type: 'stopTask', taskId: id }); }
