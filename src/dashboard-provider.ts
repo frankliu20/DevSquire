@@ -197,7 +197,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         break;
       }
       case 'resumeSession': {
-        this.taskRunner.resumeSession(msg.taskId, msg.aiSessionId, msg.worktreeDir);
+        this.taskRunner.resumeSession(msg.taskId, msg.aiSessionId, msg.aiSource || 'claude', msg.worktreeDir);
         break;
       }
 
@@ -417,11 +417,12 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
         // Find last resumable AI session
         let resumableSessionId: string | null = null;
+        let resumableSessionSource: string = 'claude';
         for (let i = sessions.length - 1; i >= 0; i--) {
           const aiSessions = sessions[i].aiSessions;
           if (aiSessions) {
             for (const ai of aiSessions) {
-              if (ai.resumable) { resumableSessionId = ai.id; break; }
+              if (ai.resumable) { resumableSessionId = ai.id; resumableSessionSource = ai.source; break; }
             }
           }
           if (resumableSessionId) break;
@@ -435,6 +436,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           sessionCount: sessions.length,
           lastSessionTime: lastSession.endedAt || lastSession.startedAt || '',
           resumableSessionId,
+          resumableSessionSource,
           worktreeDir: '',
         });
       }

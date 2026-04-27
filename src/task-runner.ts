@@ -338,16 +338,19 @@ export class TaskRunner {
     return undefined;
   }
 
-  /** Resume a Claude AI session: create terminal with `claude --resume`, bind it back to the task */
-  resumeSession(taskId: string, aiSessionId: string, worktreeDir?: string): void {
+  /** Resume an AI session: create terminal with appropriate resume command, bind it back to the task */
+  resumeSession(taskId: string, aiSessionId: string, aiSource: 'claude' | 'copilot', worktreeDir?: string): void {
     const cwd = worktreeDir || this.workspaceRoot;
+    const resumeCmd = aiSource === 'copilot'
+      ? `copilot --resume "${aiSessionId}"`
+      : `claude --resume "${aiSessionId}"`;
     const terminal = vscode.window.createTerminal({
       name: `Resume: ${aiSessionId.slice(0, 8)}`,
       cwd,
       iconPath: new vscode.ThemeIcon('debug-restart'),
     });
     terminal.show(false);
-    terminal.sendText(`claude --resume "${aiSessionId}"`, true);
+    terminal.sendText(resumeCmd, true);
 
     // Bind terminal back to existing task so it shows as running
     const found = this.findTask(taskId);
