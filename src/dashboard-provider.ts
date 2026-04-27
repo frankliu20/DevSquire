@@ -211,7 +211,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         break;
       }
       case 'dismissDecision': {
-        // Log the dismissal event to JSONL so orphan decisions don't reappear
+        // Log the dismissal event to JSONL so dismissed decisions don't reappear
         if (msg.taskId) {
           this.squireDir.logJson(msg.taskId, { event: 'decision_dismissed', decision_id: msg.id });
         }
