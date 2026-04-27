@@ -506,6 +506,7 @@ input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px v
       <select id="manualMode" class="btn-s">
         <option value="auto" \${defaultMode === 'auto' ? 'selected' : ''}>Auto</option>
         <option value="normal" \${defaultMode === 'normal' ? 'selected' : ''}>Normal</option>
+        <option value="chat" \${defaultMode === 'chat' ? 'selected' : ''}>Chat</option>
       </select>
       <button onclick="submitManualIssue()">Go</button>
     </div>
@@ -681,6 +682,7 @@ function renderIssues(list) {
         <select class="btn-s" id="mode-\${i.number}" onclick="event.stopPropagation()">
           <option value="auto" \${defaultMode==='auto'?'selected':''}>Auto</option>
           <option value="normal" \${defaultMode==='normal'?'selected':''}>Normal</option>
+          <option value="chat" \${defaultMode==='chat'?'selected':''}>Chat</option>
         </select>
         <button class="btn-s btn-pri" onclick="event.stopPropagation();assignIssue(\${i.number})">Assign</button>
       </span>
@@ -857,6 +859,7 @@ function renderTasks(list) {
     var phases = PHASE_PIPELINES[t.type] || PHASE_PIPELINES['dev-issue'];
     // Own PR reviews don't need 'published' step
     if (t.type === 'review-pr' && t.isOwnPR) phases = ['reviewing', 'reviewed', 'done'];
+    const isChat = t.label && t.label.startsWith('[Chat]');
     const isCyclic = CYCLIC_TYPES[t.type] || false;
     const rawPhase = t.phase || 'planned';
     const displayPhase = PHASE_MAP[rawPhase] || phases[0];
@@ -943,7 +946,7 @@ function renderTasks(list) {
         <span class="task-label">\${esc(t.label || 'Task ' + t.id)}</span>
         <span class="badge \${badgeClass}">\${t.status === 'orphan' ? 'orphan' : esc(latestStatus)}</span>
       </div>
-      \${isCyclic ? '' : '<div class="pipeline">' + pipeline + '</div>'}
+      \${isCyclic || isChat ? '' : '<div class="pipeline">' + pipeline + '</div>'}
       <div class="task-meta">
         \${t.branch ? t.branch + ' · ' : ''}\${t.prNumber ? 'PR #' + t.prNumber + ' · ' : ''}\${shortTime(t.startedAt)}
         \${t.status === 'running' ? ' · ' + duration(t.startedAt) : ''}
