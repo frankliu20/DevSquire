@@ -43,12 +43,32 @@ function readTail(filePath: string, bytes: number = 4096): string {
 }
 
 /**
- * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/*.jsonl
- * for session files whose last-prompt entry contains the taskLogId.
+ * Parse the last-prompt JSON line from a Claude JSONL file tail.
+ * Returns { lastPrompt, sessionId } or null if not found.
+ * Exported for testing.
+ */
+export function parseClaudeLastPrompt(tail: string): { lastPrompt: string; sessionId: string } | null {
+  // Search lines in reverse — last-prompt is near the end
+  const lines = tail.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line || !line.includes('"last-prompt"')) continue;
+    try {
+      const obj = JSON.parse(line);
+      if (obj.type === 'last-prompt' && obj.sessionId) {
+        return { lastPrompt: obj.lastPrompt || '', sessionId: obj.sessionId };
+      }
+    } catch { /* skip malformed lines */ }
+  }
+  return null;
+}
+
+/**
+ * Detect Claude AI sessions by scanning ~/.claude/projects/<encoded-cwd>/*.jsonl.
+ * Reads the tail of each file and parses the last-prompt entry to match taskLogId
+ * and extract the sessionId directly.
  *
  * Claude encodes the cwd into a directory name by replacing : . \ / with -
- * The JSONL filename (minus .jsonl) is the Claude session ID.
- * The last-prompt line near the end of the file is used for fast matching.
  */
 export function detectClaudeSession(cwd: string, taskLogId: string): AiSession | null {
   try {
@@ -66,10 +86,9 @@ export function detectClaudeSession(cwd: string, taskLogId: string): AiSession |
 
     for (const file of sorted) {
       const tail = readTail(path.join(projectDir, file.name));
-      // Fast path: look for last-prompt line containing taskLogId
-      if (contentMatchesTaskLogId(tail, taskLogId)) {
-        const sessionId = file.name.replace('.jsonl', '');
-        return { source: 'claude', id: sessionId, resumable: true };
+      const lastPrompt = parseClaudeLastPrompt(tail);
+      if (lastPrompt && lastPrompt.lastPrompt.includes(taskLogId)) {
+        return { source: 'claude', id: lastPrompt.sessionId, resumable: true };
       }
     }
     return null;
