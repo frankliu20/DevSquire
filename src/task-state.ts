@@ -48,8 +48,7 @@ export interface TaskState {
   startedAt: string;
   updatedAt: string;
   events: TaskEvent[];
-  sessions: SessionInfo[];
-  currentSessionId: string;
+  currentSessionId?: string;
 }
 
 export interface TaskEvent {
@@ -58,15 +57,6 @@ export interface TaskEvent {
   message?: string;
   type?: string;
   dsqSession?: string;
-}
-
-/** Per-session summary derived from JSONL events */
-export interface SessionInfo {
-  id: string;
-  phase: TaskPhase;
-  eventCount: number;
-  startedAt: string;
-  updatedAt: string;
 }
 
 /** Pending decision from the AI */
@@ -156,8 +146,8 @@ export class TaskStateReader {
     return tasks.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
 
-  /** Read a single task state */
-  readTask(taskId: string): TaskState | null {
+  /** Read a single task state, optionally filtering events by session ID */
+  readTask(taskId: string, sessionId?: string): TaskState | null {
     const logFile = path.join(this.squireDir, 'logs', `${taskId}.jsonl`);
     if (!fs.existsSync(logFile)) return null;
 
@@ -206,46 +196,14 @@ export class TaskStateReader {
         }
       }
 
-      // Group events by session
-      const sessionMap = new Map<string, { phase: TaskPhase; eventCount: number; startedAt: string; updatedAt: string }>();
-      let currentSessionId = 'legacy';
+      // Determine currentSessionId from the last event's dsq_session
+      const lastSessionEvent = [...events].reverse().find((e) => e.dsqSession);
+      const currentSessionId = lastSessionEvent?.dsqSession;
 
-      for (const evt of events) {
-        const sid = evt.dsqSession || 'legacy';
-        currentSessionId = sid;
-
-        const existing = sessionMap.get(sid);
-        if (existing) {
-          existing.eventCount++;
-          existing.updatedAt = evt.timestamp;
-          // Update session phase using same logic as task-level phase
-          const evtType = evt.type;
-          if (evtType && EVENT_TYPE_TO_PHASE[evtType]) {
-            existing.phase = EVENT_TYPE_TO_PHASE[evtType];
-          } else if (evt.phase && VALID_PHASES.has(evt.phase)) {
-            existing.phase = evt.phase as TaskPhase;
-          }
-        } else {
-          let sessionPhase: TaskPhase = 'planned';
-          const evtType = evt.type;
-          if (evtType && EVENT_TYPE_TO_PHASE[evtType]) {
-            sessionPhase = EVENT_TYPE_TO_PHASE[evtType];
-          } else if (evt.phase && VALID_PHASES.has(evt.phase)) {
-            sessionPhase = evt.phase as TaskPhase;
-          }
-          sessionMap.set(sid, {
-            phase: sessionPhase,
-            eventCount: 1,
-            startedAt: evt.timestamp,
-            updatedAt: evt.timestamp,
-          });
-        }
-      }
-
-      const sessions: SessionInfo[] = [];
-      for (const [sid, info] of sessionMap) {
-        sessions.push({ id: sid, ...info });
-      }
+      // Optionally filter events by session ID
+      const filteredEvents = sessionId
+        ? events.filter((e) => e.dsqSession === sessionId)
+        : events;
 
       return {
         id: taskId,
@@ -258,8 +216,7 @@ export class TaskStateReader {
         worktreeDir,
         startedAt,
         updatedAt,
-        events,
-        sessions,
+        events: filteredEvents,
         currentSessionId,
       };
     } catch {
