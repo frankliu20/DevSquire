@@ -156,6 +156,7 @@ export class TaskStateReader {
       const lines = content.trim().split('\n').filter(Boolean);
       const events: TaskEvent[] = [];
       let phase: TaskPhase = 'planned';
+      let dismissed = false;
       let branch: string | undefined;
       let prNumber: number | undefined;
       let prUrl: string | undefined;
@@ -183,6 +184,7 @@ export class TaskStateReader {
           if (entry.issue_number) issueNumber = entry.issue_number;
           if (entry.issue_url) issueUrl = entry.issue_url;
           if (entry.worktree_dir) worktreeDir = entry.worktree_dir;
+          if (entry.event === 'task_dismissed') dismissed = true;
 
           events.push({
             timestamp: entry.timestamp,
@@ -204,6 +206,8 @@ export class TaskStateReader {
       const filteredEvents = sessionId
         ? events.filter((e) => e.dsqSession === sessionId)
         : events;
+
+      if (dismissed) return null;
 
       return {
         id: taskId,

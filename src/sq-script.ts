@@ -13,28 +13,15 @@
  */
 export const SQ_SCRIPT = `#!/usr/bin/env node
 import { writeFileSync, readFileSync, existsSync, appendFileSync, mkdirSync, unlinkSync } from 'fs';
-import { join, dirname, basename } from 'path';
-import { homedir } from 'os';
+import { join } from 'path';
 
 const [,, cmd, ...argv] = process.argv;
-
-function generateSessionId() {
-  const ts = Date.now();
-  const rand = Math.random().toString(36).slice(2, 6).padEnd(4, '0');
-  return \\\`dsq-\\\${ts}-\\\${rand}\\\`;
-}
-
-
-if (cmd === 'session-id') {
-  console.log(generateSessionId());
-  process.exit(0);
-}
 
 const squireDir = argv[0];
 const rest = argv.slice(1);
 
 if (!cmd || !squireDir) {
-  console.error('Usage: sq.mjs <log|decision|decision-clear|session-id> <squire-dir> ...');
+  console.error('Usage: sq.mjs <log|decision|decision-clear> <squire-dir> ...');
   process.exit(1);
 }
 
@@ -53,59 +40,6 @@ function parseFlags(args) {
     }
   }
   return { positional, flags };
-}
-
-// --- Session Index helpers ---
-const GLOBAL_SQUIRE_DIR = join(homedir(), '.squire');
-const SESSION_INDEX_DIR = join(GLOBAL_SQUIRE_DIR, 'sessions');
-const SESSION_INDEX_PATH = join(SESSION_INDEX_DIR, 'index.json');
-
-function readSessionIndex() {
-  try {
-    if (existsSync(SESSION_INDEX_PATH)) {
-      return JSON.parse(readFileSync(SESSION_INDEX_PATH, 'utf-8'));
-    }
-  } catch { /* corrupted — start fresh */ }
-  return {};
-}
-
-function writeSessionIndex(index) {
-  mkdirSync(SESSION_INDEX_DIR, { recursive: true });
-  writeFileSync(SESSION_INDEX_PATH, JSON.stringify(index, null, 2));
-}
-
-function deriveRepoSlug(sqDir) {
-  // Resolve the repo root from squireDir (handles worktree paths)
-  const normalized = sqDir.replace(/\\\\/g, '/');
-  const worktreeMatch = normalized.match(/^(.+?\\.squire)\\/worktrees\\//);
-  const rootSquire = worktreeMatch ? worktreeMatch[1] : normalized;
-  const repoRoot = dirname(rootSquire);
-  // Try to read repo slug from git remote
-  try {
-    const { execSync } = require('child_process');
-    const url = execSync('git remote get-url origin', { cwd: repoRoot, encoding: 'utf-8', timeout: 5000 }).trim();
-    const m = url.match(/github\\.com[/:](.+?)(?:\\.git)?$/);
-    if (m) return m[1];
-  } catch { /* fallback */ }
-  return basename(repoRoot);
-}
-
-function createSessionRecord(taskId, flags) {
-  const index = readSessionIndex();
-  const repo = deriveRepoSlug(squireDir);
-
-  if (!index[repo]) index[repo] = {};
-  if (!index[repo][taskId]) index[repo][taskId] = { sessions: [] };
-
-  const session = {
-    id: flags['session-id'] || generateSessionId(),
-    startedAt: ts,
-    endedAt: null,
-    aiSessions: [],
-  };
-  index[repo][taskId].sessions.push(session);
-
-  writeSessionIndex(index);
 }
 
 if (cmd === 'log') {
@@ -129,11 +63,6 @@ if (cmd === 'log') {
 
   mkdirSync(logsDir, { recursive: true });
   appendFileSync(join(logsDir, taskId + '.jsonl'), JSON.stringify(entry) + String.fromCharCode(10));
-
-  // Create session record in global index on session_start
-  if (eventType === 'session_start' || eventType === 'task_start') {
-    try { createSessionRecord(taskId, flags); } catch { /* non-critical */ }
-  }
 
 } else if (cmd === 'decision') {
   // sq.mjs decision <squire-dir> <task-id> <title> <options-csv>
@@ -176,7 +105,7 @@ if (cmd === 'log') {
   try { unlinkSync(join(decisionsDir, taskId + '.json')); } catch { /* ok if missing */ }
 
 } else {
-  console.error('Unknown command: ' + cmd + '. Use: log, decision, decision-clear, session-id');
+  console.error('Unknown command: ' + cmd + '. Use: log, decision, decision-clear');
   process.exit(1);
 }
 `;

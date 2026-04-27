@@ -91,7 +91,7 @@
       "properties": {
         "devSquire.aiPlatform": {
           "type": "string",
-          "default": "copilot-cli",
+          "default": "claude-code",
           "enum": [
             "copilot-cli",
             "claude-code"
