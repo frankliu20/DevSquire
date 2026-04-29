@@ -168,8 +168,8 @@ export class ReportGenerator {
       const body = `${date} status update:\n[${status}] #${issue.number} ${issue.title}${prLink}`;
       try {
         cp.execSync(
-          `gh issue comment ${issue.number} --repo ${this.slug} --body "${body.replace(/"/g, '\\"')}"`,
-          { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] },
+          `gh issue comment ${issue.number} --repo ${this.slug} --body-file -`,
+          { encoding: 'utf-8', timeout: 10000, input: body, stdio: ['pipe', 'pipe', 'pipe'] },
         );
       } catch { /* ignore */ }
     }
