@@ -361,13 +361,36 @@ export class TaskRunner {
     terminal.sendText(resumeCmd, true);
 
     // Bind terminal back to existing task so it shows as running
-    const found = this.findTask(taskId);
+    let found = this.findTask(taskId);
     const sessionId = SessionIndexManager.generateSessionId();
+
+    // Extension may have restarted — task only exists in JSONL logs, not in memory.
+    // Re-create the in-memory TaskInfo so the dashboard shows hasTerminal / worktreeDir.
+    if (!found) {
+      const runtimeId = `resumed-${Date.now()}`;
+      const task: TaskInfo = {
+        id: runtimeId,
+        taskLogId: taskId,
+        type: 'dev-issue',
+        label: `Resumed: ${taskId}`,
+        worktreeDir,
+        worktreeBranch: worktreeDir ? worktreeDir.split('/').pop() : undefined,
+        status: 'running',
+        terminal,
+        sessionIds: [sessionId],
+        createdAt: Date.now(),
+      };
+      this.tasks.set(runtimeId, task);
+      found = [runtimeId, task];
+    }
+
     if (found) {
       const task = found[1];
       task.terminal = terminal;
       task.status = 'running';
-      task.sessionIds.push(sessionId);
+      if (!task.sessionIds.includes(sessionId)) task.sessionIds.push(sessionId);
+      // Restore worktreeDir if it was lost (e.g. task was in memory but without worktreeDir)
+      if (!task.worktreeDir && worktreeDir) task.worktreeDir = worktreeDir;
       this._onTasksChanged.fire();
       this._onSessionEvent.fire({
         type: 'session_created',
