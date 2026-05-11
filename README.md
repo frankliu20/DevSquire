@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  English | <a href="./README.zh-CN.md">中文</a>
+  English | <a href="https://github.com/frankliu20/DevSquire/blob/main/README.zh-CN.md">中文</a>
 </p>
 
 ---
