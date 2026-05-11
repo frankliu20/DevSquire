@@ -82,7 +82,8 @@
         {
           "type": "webview",
           "id": "devSquire.dashboard",
-          "name": "Dashboard"
+          "name": "Dashboard",
+          "retainContextWhenHidden": true
         }
       ]
     },
